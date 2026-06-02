@@ -1,6 +1,9 @@
 # Build a standalone Windows executable with PyInstaller.
 #
-# Usage (from the repo root):
+# Works no matter where you run it from — paths are resolved relative to this
+# script's location (the repo root is its parent folder).
+#
+# Usage:
 #   .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 #   powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1            # one-dir (recommended)
 #   powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -OneFile   # single .exe
@@ -15,14 +18,20 @@
 param([switch]$OneFile)
 
 $ErrorActionPreference = "Stop"
-$py = "C:\XVALite\.venv\Scripts\python.exe"
+
+# Resolve repo root from this script's location and work from there.
+$repo = Split-Path -Parent $PSScriptRoot
+Set-Location $repo
+$py = Join-Path $repo ".venv\Scripts\python.exe"
+
+if (-not (Test-Path $py)) { throw "Python venv not found at $py" }
 
 # Make sure the icon exists.
-if (-not (Test-Path "C:\XVALite\assets\icon.ico")) {
-    & $py "C:\XVALite\scripts\make_icon.py"
+if (-not (Test-Path "$repo\assets\icon.ico")) {
+    & $py "$repo\scripts\make_icon.py"
 }
 
-$args = @(
+$pyiArgs = @(
     "--noconfirm", "--clean", "--windowed", "--name", "XVALite",
     "--paths", "src",
     "--icon", "assets\icon.ico",
@@ -31,10 +40,13 @@ $args = @(
     "--collect-all", "sounddevice",
     "--collect-all", "parselmouth"
 )
-if ($OneFile) { $args += "--onefile" }
-$args += "xvalite_app.py"
+if ($OneFile) { $pyiArgs += "--onefile" }
+$pyiArgs += "xvalite_app.py"
 
-& $py -m PyInstaller @args
+& $py -m PyInstaller @pyiArgs
+if ($LASTEXITCODE -ne 0) {
+    throw "PyInstaller failed with exit code $LASTEXITCODE"
+}
 
 Write-Host ""
 if ($OneFile) {
