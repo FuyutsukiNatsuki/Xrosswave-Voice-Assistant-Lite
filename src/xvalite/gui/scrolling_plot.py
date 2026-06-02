@@ -17,6 +17,7 @@ from collections import deque
 from typing import Deque, Dict, Tuple
 
 import pyqtgraph as pg
+from PySide6 import QtCore
 
 
 class ScrollingPlot(pg.PlotWidget):
@@ -40,6 +41,34 @@ class ScrollingPlot(pg.PlotWidget):
         self.setYRange(*y_range)
         self.showGrid(x=True, y=True, alpha=0.3)
         self.addLegend(offset=(-10, 10))
+
+        self._init_hover_readout()
+
+    def _init_hover_readout(self) -> None:
+        """Crosshair line + label that follows the mouse, showing Hz at cursor."""
+        self._hline = pg.InfiniteLine(
+            angle=0, movable=False, pen=pg.mkPen("#888", style=QtCore.Qt.DashLine)
+        )
+        self._hline.setZValue(50)
+        self.addItem(self._hline, ignoreBounds=True)
+        self._cursor_label = pg.TextItem(color="#ddd", anchor=(0, 1))
+        self._cursor_label.setZValue(51)
+        self.addItem(self._cursor_label, ignoreBounds=True)
+        self._hline.hide()
+        self._cursor_label.hide()
+        self.scene().sigMouseMoved.connect(self._on_mouse_moved)
+
+    def _on_mouse_moved(self, scene_pos) -> None:
+        if not self.sceneBoundingRect().contains(scene_pos):
+            self._hline.hide()
+            self._cursor_label.hide()
+            return
+        point = self.plotItem.vb.mapSceneToView(scene_pos)
+        self._hline.setPos(point.y())
+        self._cursor_label.setText(f"{point.y():.0f} Hz")
+        self._cursor_label.setPos(point.x(), point.y())
+        self._hline.show()
+        self._cursor_label.show()
 
     def add_series(
         self,

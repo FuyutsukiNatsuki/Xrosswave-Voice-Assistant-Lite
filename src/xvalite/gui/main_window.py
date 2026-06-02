@@ -43,6 +43,12 @@ EXTENDED_CEILING = 2100.0   # ~C7
 FORMANT_SERIES = [("f1", "F1", "r"), ("f2", "F2", "g"), ("f3", "F3", "c"), ("f4", "F4", "m")]
 FORMANT_Y_MAX = 5000.0
 
+# Numeric readout colors (match the plot pens; bright for a dark background).
+READOUT_SERIES = [
+    ("f0", "#ffff00"), ("f1", "#ff5555"), ("f2", "#55ff55"),
+    ("f3", "#55ffff"), ("f4", "#ff55ff"),
+]
+
 AUDIO_FILE_FILTER = "Audio (*.wav *.flac *.ogg *.aiff *.aif *.mp3);;All files (*)"
 
 
@@ -135,13 +141,19 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(1 if self._ceiling >= EXTENDED_CEILING else 0)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
-        self.status = QtWidgets.QLabel("F0: --")
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
         row.addWidget(QtWidgets.QLabel("Range:"))
         row.addWidget(self.mode_combo)
         row.addStretch(1)
-        row.addWidget(self.status)
+
+        # Numeric readout: F0 + F1–F4, color-matched to the plots.
+        self.readout = {}
+        for key, color in READOUT_SERIES:
+            lbl = QtWidgets.QLabel(f"{key.upper()}: --")
+            lbl.setStyleSheet(f"color: {color}; font-weight: bold; padding: 0 4px;")
+            self.readout[key] = lbl
+            row.addWidget(lbl)
         return row
 
     def _build_vq_row(self) -> QtWidgets.QHBoxLayout:
@@ -189,6 +201,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pitch_plot.clear_data()
         self.formant_plot.clear_data()
         self._reset_vq_labels()
+        self._reset_readout()
         self.pipeline.start()
         self._timer.start()
         self._set_running_ui(True)
@@ -207,17 +220,25 @@ class MainWindow(QtWidgets.QMainWindow):
         for ev in self.pipeline.drain():
             if isinstance(ev, PitchSample):
                 self.pitch_plot.append("f0", ev.t, ev.f0)
-                if np.isfinite(ev.f0):
-                    self.status.setText(f"F0: {ev.f0:.1f} Hz")
+                self._set_readout("f0", ev.f0)
             elif isinstance(ev, FormantSample):
                 for i, (key, _name, _color) in enumerate(FORMANT_SERIES):
                     self.formant_plot.append(key, ev.t, ev.formants[i])
+                    self._set_readout(key, ev.formants[i])
             elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
         self.pitch_plot.refresh()
         self.formant_plot.refresh()
         if self.pipeline is not None and self.pipeline.is_finished:
             self._stop()  # file ended: reset controls
+
+    def _set_readout(self, key: str, value: float) -> None:
+        text = f"{key.upper()}: {value:.0f}" if np.isfinite(value) else f"{key.upper()}: --"
+        self.readout[key].setText(text)
+
+    def _reset_readout(self) -> None:
+        for key in self.readout:
+            self.readout[key].setText(f"{key.upper()}: --")
 
     # -- voice quality -----------------------------------------------------
     def _update_voice_quality(self, vq) -> None:
