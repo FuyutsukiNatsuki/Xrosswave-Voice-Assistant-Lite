@@ -24,6 +24,13 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="XVALite voice trainer")
     parser.add_argument("--file", default=None, help="audio file to analyze (else mic)")
     parser.add_argument("--device", type=int, default=None, help="mic device index")
+    parser.add_argument(
+        "--silence-db",
+        type=float,
+        default=None,
+        help="input dead zone in dBFS; windows quieter than this are silence "
+        "(default -40). Raise toward 0 to gate more aggressively.",
+    )
     args = parser.parse_args()
 
     app = QtWidgets.QApplication(sys.argv)
@@ -33,7 +40,10 @@ def main() -> int:
     else:
         source = AudioInput(samplerate=DEFAULT_SAMPLERATE, device=args.device)
 
-    pipeline = AnalysisPipeline(source, samplerate=DEFAULT_SAMPLERATE)
+    pipeline_kwargs = {}
+    if args.silence_db is not None:
+        pipeline_kwargs["silence_db"] = args.silence_db
+    pipeline = AnalysisPipeline(source, samplerate=DEFAULT_SAMPLERATE, **pipeline_kwargs)
     window = MainWindow(pipeline)
     window.resize(900, 420)
     window.show()

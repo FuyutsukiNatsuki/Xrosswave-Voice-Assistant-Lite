@@ -96,6 +96,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | 統合層(`pipeline.AnalysisPipeline`)を実装。2系統カデンス・結果ストリーム・一時停止セマンティクスを生声で検証。次はGUI |
 | 2026-06-02 | Claude Code (Opus 4.8) | GUI最小版(`gui/`)実装: ScrollingPlot＋ピッチグラフ＋Pause/Stop＋QTimerドレイン。`run_app.py`起動、`smoke_gui.py`でoffscreen自動検証（17点描画・例外なし） |
 | 2026-06-02 | Claude Code (Opus 4.8) | F0追跡＆表示上限を C7(≒2100Hz)に拡張（声エンスージアスト向け）。pipeline.pitch_floor/ceiling を公開しGUI軸と連動。トレードオフ: 高ceilingで遷移部にオクターブ誤検出が出やすい（平滑化は未実装） |
+| 2026-06-02 | Claude Code (Opus 4.8) | 入力デッドゾーン(`silence_db`既定-40dBFS)追加。無音窓は解析せずNaN。実測（音声~-20/無音<-44dBFS）に基づき決定、偽フレーム20個除去を確認。`--silence-db`で調整可 |
 
 ## 次にやるべきこと（TODO）
 

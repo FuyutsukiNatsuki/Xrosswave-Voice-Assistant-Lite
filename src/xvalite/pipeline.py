@@ -23,6 +23,7 @@ cleared buffer).
 
 from __future__ import annotations
 
+import math
 import queue
 import threading
 from dataclasses import dataclass
@@ -39,6 +40,20 @@ from .audio.input import DEFAULT_SAMPLERATE
 # (up to ~C7) is tracked and plottable. Voice-quality periodicity uses its own,
 # more conservative ceiling (see analysis.voice_quality) and is unaffected.
 DEFAULT_F0_TRACK_CEILING = 2100.0  # ~C7 (2093 Hz)
+
+# Input dead zone: windows quieter than this (RMS, dBFS) are treated as silence
+# and emit NaN, instead of letting the tracker invent pitch/formants from the
+# noise floor. Measured on real voice: speech sits around -20 dBFS while silent
+# gaps fall below -44 dBFS, so -40 cleanly separates them with margin.
+DEFAULT_SILENCE_DB = -40.0
+
+
+def _dbfs(samples: np.ndarray) -> float:
+    """RMS level of a window in dBFS (full-scale = 0 dB). -inf for true silence."""
+    if samples.size == 0:
+        return -math.inf
+    rms = float(np.sqrt(np.mean(samples.astype(np.float64) ** 2)))
+    return -math.inf if rms <= 0.0 else 20.0 * math.log10(rms)
 
 
 class AudioSource(Protocol):
@@ -81,12 +96,15 @@ class AnalysisPipeline:
         slow_interval_sec: float = 1.0,
         pitch_floor: float = DEFAULT_PITCH_FLOOR,
         pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
+        silence_db: float = DEFAULT_SILENCE_DB,
     ) -> None:
         self.source = source
         self.samplerate = samplerate
         # Public so the GUI can match its F0 axis to the tracked range.
         self.pitch_floor = pitch_floor
         self.pitch_ceiling = pitch_ceiling
+        # Public so it can be tuned at runtime (input dead zone, dBFS).
+        self.silence_db = silence_db
         self._pitch_win = int(samplerate * pitch_window_sec)
         self._slow_win = int(samplerate * slow_window_sec)
         self._slow_interval = int(samplerate * slow_interval_sec)
@@ -175,19 +193,27 @@ class AnalysisPipeline:
             t = total / self.samplerate
 
             if buffer.size >= self._pitch_win:
-                f0 = latest_f0(
-                    buffer[-self._pitch_win :],
-                    self.samplerate,
-                    pitch_floor=self.pitch_floor,
-                    pitch_ceiling=self.pitch_ceiling,
-                )
+                window = buffer[-self._pitch_win :]
+                if _dbfs(window) < self.silence_db:
+                    f0 = float("nan")  # below the dead zone: treat as silence
+                else:
+                    f0 = latest_f0(
+                        window,
+                        self.samplerate,
+                        pitch_floor=self.pitch_floor,
+                        pitch_ceiling=self.pitch_ceiling,
+                    )
                 self._emit(PitchSample(t, f0))
 
             if buffer.size >= self._slow_win and (total - last_slow) >= self._slow_interval:
                 last_slow = total
                 window = buffer[-self._slow_win :]
-                formants = latest_formants(window, self.samplerate)
-                vq = measure_voice_quality(window, self.samplerate)
+                if _dbfs(window) < self.silence_db:
+                    formants = np.full(4, np.nan)
+                    vq = VoiceQuality(float("nan"), float("nan"))
+                else:
+                    formants = latest_formants(window, self.samplerate)
+                    vq = measure_voice_quality(window, self.samplerate)
                 self._emit(SlowSample(t, formants, vq))
 
         self.source.stop()

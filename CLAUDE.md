@@ -78,6 +78,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
     as `pipeline.pitch_floor`/`pitch_ceiling` so the GUI axis matches. Trade-off: a high
     ceiling can yield occasional octave-jump spikes on noisy/transitional frames (no
     smoothing yet). Voice-quality periodicity keeps its own conservative ceiling.
+    Input dead zone: windows quieter than `silence_db` (default -40 dBFS) emit NaN
+    instead of inventing pitch/formants from the noise floor (speech ~-20 dBFS, silent
+    gaps <-44 dBFS). Tunable via `pipeline.silence_db` or `run_app.py --silence-db`.
   - `gui/scrolling_plot.py` — `ScrollingPlot`: reusable pyqtgraph time-series widget;
     multiple named series, view scrolls by latest data timestamp, NaN → gaps.
   - `gui/main_window.py` — `MainWindow`: QTimer polls `pipeline.drain()` → pitch plot;
