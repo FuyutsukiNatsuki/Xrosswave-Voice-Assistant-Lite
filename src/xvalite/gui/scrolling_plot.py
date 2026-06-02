@@ -40,9 +40,27 @@ class ScrollingPlot(pg.PlotWidget):
         self.showGrid(x=True, y=True, alpha=0.3)
         self.addLegend(offset=(-10, 10))
 
-    def add_series(self, key: str, pen, name: str | None = None) -> None:
-        curve = self.plot(pen=pen, name=name, connect="finite")
+    def add_series(
+        self,
+        key: str,
+        pen,
+        name: str | None = None,
+        symbol: str | None = None,
+        symbol_size: int = 7,
+    ) -> None:
+        kwargs = dict(pen=pen, name=name, connect="finite")
+        if symbol is not None:
+            kwargs.update(
+                symbol=symbol,
+                symbolSize=symbol_size,
+                symbolPen=pen,
+                symbolBrush=pen.color(),
+            )
+        curve = self.plot(**kwargs)
         self._series[key] = (deque(), deque(), curve)
+
+    def set_y_range(self, lo: float, hi: float) -> None:
+        self.setYRange(lo, hi)
 
     def append(self, key: str, t: float, value: float) -> None:
         tq, yq, _ = self._series[key]

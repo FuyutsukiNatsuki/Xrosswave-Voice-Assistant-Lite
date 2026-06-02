@@ -26,7 +26,7 @@ from xvalite.gui.main_window import MainWindow  # noqa: E402
 from xvalite.pipeline import AnalysisPipeline  # noqa: E402
 
 PATH = r"C:\XVALite\testdata\test.wav"
-RUN_MS = 1500
+RUN_MS = 3000
 
 
 def main() -> int:
@@ -34,21 +34,25 @@ def main() -> int:
     source = FileInput(PATH, samplerate=DEFAULT_SAMPLERATE, realtime=True)
     pipeline = AnalysisPipeline(source, samplerate=DEFAULT_SAMPLERATE)
     window = MainWindow(pipeline)
-    window.resize(900, 420)
+    window.resize(900, 600)
     window.show()
     window.start()
 
-    # Pause/resume mid-run to exercise that path too.
-    QtCore.QTimer.singleShot(RUN_MS // 3, lambda: window.pause_btn.setChecked(True))
-    QtCore.QTimer.singleShot(2 * RUN_MS // 3, lambda: window.pause_btn.setChecked(False))
+    # Exercise the range-mode toggle, then a pause/resume cycle.
+    QtCore.QTimer.singleShot(400, lambda: window.mode_combo.setCurrentIndex(0))
+    QtCore.QTimer.singleShot(800, lambda: window.mode_combo.setCurrentIndex(1))
+    QtCore.QTimer.singleShot(RUN_MS // 2, lambda: window.pause_btn.setChecked(True))
+    QtCore.QTimer.singleShot(RUN_MS // 2 + 400, lambda: window.pause_btn.setChecked(False))
     QtCore.QTimer.singleShot(RUN_MS, app.quit)
     app.exec()
 
-    n = window.pitch_plot.point_count("f0")
+    pitch_n = window.pitch_plot.point_count("f0")
+    formant_n = window.formant_plot.point_count("f1")
     window.pipeline.stop()
-    print(f"pitch points collected: {n}")
-    ok = n > 0
-    print("SMOKE OK" if ok else "SMOKE FAIL (no data)")
+    print(f"pitch points collected:   {pitch_n}")
+    print(f"formant points collected: {formant_n}")
+    ok = pitch_n > 0 and formant_n > 0
+    print("SMOKE OK" if ok else "SMOKE FAIL (missing data)")
     return 0 if ok else 1
 
 
