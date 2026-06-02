@@ -75,13 +75,23 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Build → dist\XVALite\XVALite.exe (one-dir; ship the whole XVALite folder, ~196 MB)
 powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1
+
+# Single-file build → dist\XVALite.exe (slower first start)
+powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1 -OneFile
+
+# Regenerate the app icon (assets/icon.ico)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\make_icon.py
 ```
 
+The runnable output is in **dist\**, not build\ (build\ holds intermediate files
+and has no python3xx.dll — running it gives "Failed to load Python DLL").
+
 `xvalite_app.py` is the frozen entry point; `src/xvalite/app.py:main` is the shared
-launch logic (dev launcher and exe both call it). The build collects soundfile /
-sounddevice / parselmouth binaries (libsndfile, PortAudio, the Praat extension).
-Verified to launch; ~1 ms/chunk analysis vs a 46 ms budget (2%), so real time is
-comfortable.
+launch logic (dev launcher and exe both call it) and sets the window icon
+(`assets/icon.ico`, resolved via `sys._MEIPASS` when frozen). The build embeds the
+icon, bundles it as data, and collects soundfile / sounddevice / parselmouth
+binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
+~1 ms/chunk analysis vs a 46 ms budget (2%), so real time is comfortable.
 
 ## Layout
 

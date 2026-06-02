@@ -3,3 +3,6 @@
 
 # Packaging the app into a standalone executable.
 pyinstaller
+
+# Generating the app icon (scripts/make_icon.py).
+pillow

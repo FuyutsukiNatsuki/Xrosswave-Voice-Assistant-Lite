@@ -8,14 +8,26 @@ PyInstaller), so the launch logic lives in one place.
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from typing import Optional, Sequence
 
-from PySide6 import QtWidgets
+from PySide6 import QtGui, QtWidgets
 
 from .audio.input import DEFAULT_SAMPLERATE
 from .gui.main_window import MainWindow
 from .pipeline import DEFAULT_SILENCE_DB
+
+
+def _icon_path() -> Optional[str]:
+    """Locate assets/icon.ico whether running from source or a frozen build."""
+    if hasattr(sys, "_MEIPASS"):  # PyInstaller bundle
+        candidate = os.path.join(sys._MEIPASS, "assets", "icon.ico")
+    else:  # repo: src/xvalite/app.py -> ../../assets
+        candidate = os.path.join(
+            os.path.dirname(__file__), "..", "..", "assets", "icon.ico"
+        )
+    return candidate if os.path.isfile(candidate) else None
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -36,6 +48,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     args = parser.parse_args(argv)
 
     app = QtWidgets.QApplication(sys.argv[:1])
+    icon = _icon_path()
+    if icon:
+        app.setWindowIcon(QtGui.QIcon(icon))
     window = MainWindow(
         samplerate=DEFAULT_SAMPLERATE,
         device=args.device,
