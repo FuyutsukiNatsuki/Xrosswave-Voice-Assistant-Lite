@@ -30,7 +30,7 @@ def main() -> int:
     # renders instead of tofu boxes.
     app.setFont(QtGui.QFont("Segoe UI", 9))
     window = MainWindow(samplerate=DEFAULT_SAMPLERATE, initial_file=PATH)
-    window.resize(900, 600)
+    window.resize(940, 820)
     window.show()
     window.start()
 

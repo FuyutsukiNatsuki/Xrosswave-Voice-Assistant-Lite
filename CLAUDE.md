@@ -45,6 +45,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 # Verify jitter/shimmer (deterministic, no mic needed)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_quality_synthetic.py
 
+# Verify narrowband spectrogram (deterministic, no mic needed)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_spectrogram_synthetic.py
+
 # Live mic jitter/shimmer readout
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_quality_mic.py
 
@@ -103,10 +106,12 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
+  - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: narrowband dB column (Hann + rFFT, fft_size 2048 ≈ 21.5 Hz resolution).
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
-    background thread. Three cadences: F0 per chunk, formants per chunk (~21 Hz),
-    jitter/shimmer once/sec (needs many glottal cycles). Results via `drain()` (FIFO of
-    `PitchSample`/`FormantSample`/`VoiceQualitySample`) and `latest_pitch()`/
+    background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
+    spectrogram per chunk, jitter/shimmer once/sec (needs many glottal cycles). Results
+    via `drain()` (FIFO of `PitchSample`/`FormantSample`/`VoiceQualitySample`/
+    `SpectrogramColumn`) and `latest_pitch()`/
     `latest_formant()`/`latest_voice_quality()`. Start-time source failures raise out of
     `start()`; mid-stream source failures set `pipeline.error` and finish; per-chunk
     analysis errors skip that chunk.
@@ -121,6 +126,8 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `gui/scrolling_plot.py` — `ScrollingPlot`: reusable pyqtgraph time-series widget;
     multiple named series, view scrolls by latest data timestamp, NaN → gaps. Hover
     crosshair shows the Hz at the cursor.
+  - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
+    inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
     (Microphone / Audio file + Browse…) → Start builds source+pipeline; QTimer polls
     `pipeline.drain()` → pitch plot (F0) + formant plot (F1–F4, markers); Pause/Resume →

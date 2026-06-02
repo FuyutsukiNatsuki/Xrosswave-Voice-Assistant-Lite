@@ -16,6 +16,7 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
+from ..analysis.spectrogram import column_frequencies
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..audio.file_input import FileInput
 from ..audio.input import DEFAULT_SAMPLERATE, AudioInput
@@ -25,9 +26,11 @@ from ..pipeline import (
     AnalysisPipeline,
     FormantSample,
     PitchSample,
+    SpectrogramColumn,
     VoiceQualitySample,
 )
 from .scrolling_plot import ScrollingPlot
+from .spectrogram_plot import SpectrogramPlot
 
 # Voice-quality readout styles.
 _VQ_BASE = "padding: 2px 8px; border-radius: 3px; font-weight: bold;"
@@ -82,15 +85,13 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addLayout(self._build_controls_row())
         layout.addLayout(self._build_vq_row())
 
-        # -- pitch plot (axis follows the tracked F0 range) --
+        # -- plots in a resizable vertical splitter --
         self.pitch_plot = ScrollingPlot(
             title="Pitch (F0)", y_label="Hz",
             y_range=(75.0, self._ceiling), window_sec=10.0,
         )
         self.pitch_plot.add_series("f0", pen=pg.mkPen("y", width=2), name="F0")
-        layout.addWidget(self.pitch_plot)
 
-        # -- formant plot (F1–F4) --
         self.formant_plot = ScrollingPlot(
             title="Formants (F1–F4)", y_label="Hz",
             y_range=(0.0, FORMANT_Y_MAX), window_sec=10.0,
@@ -99,7 +100,17 @@ class MainWindow(QtWidgets.QMainWindow):
             self.formant_plot.add_series(
                 key, pen=pg.mkPen(color, width=2), name=name, symbol="o", symbol_size=6
             )
-        layout.addWidget(self.formant_plot)
+
+        self.spectrogram_plot = SpectrogramPlot(
+            column_frequencies(self.samplerate), window_sec=10.0
+        )
+
+        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        splitter.addWidget(self.pitch_plot)
+        splitter.addWidget(self.formant_plot)
+        splitter.addWidget(self.spectrogram_plot)
+        splitter.setSizes([220, 220, 240])
+        layout.addWidget(splitter, stretch=1)
 
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(refresh_ms)
@@ -141,10 +152,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(1 if self._ceiling >= EXTENDED_CEILING else 0)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
+        self.spec_check = QtWidgets.QCheckBox("Spectrogram")
+        self.spec_check.setChecked(True)
+        self.spec_check.toggled.connect(self._on_spec_toggled)
+
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
         row.addWidget(QtWidgets.QLabel("Range:"))
         row.addWidget(self.mode_combo)
+        row.addWidget(self.spec_check)
         row.addStretch(1)
 
         # Numeric readout: F0 + F1–F4, color-matched to the plots.
@@ -208,6 +224,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pipeline = pipeline
         self.pitch_plot.clear_data()
         self.formant_plot.clear_data()
+        self.spectrogram_plot.clear_data()
         self._reset_vq_labels()
         self._reset_readout()
         self._timer.start()
@@ -234,8 +251,12 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._set_readout(key, ev.formants[i])
             elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
+            elif isinstance(ev, SpectrogramColumn):
+                self.spectrogram_plot.append(ev.t, ev.db)
         self.pitch_plot.refresh()
         self.formant_plot.refresh()
+        if self.spectrogram_plot.isVisible():
+            self.spectrogram_plot.refresh()
         if self.pipeline is not None and self.pipeline.is_finished:
             error = self.pipeline.error
             self._stop()  # file ended (or source failed): reset controls
@@ -293,6 +314,9 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.pipeline is not None:
             self.pipeline.pitch_ceiling = self._ceiling
         self.pitch_plot.set_y_range(75.0, self._ceiling)
+
+    def _on_spec_toggled(self, checked: bool) -> None:
+        self.spectrogram_plot.setVisible(checked)
 
     def _on_source_changed(self, _index: int) -> None:
         self._sync_source_widgets()

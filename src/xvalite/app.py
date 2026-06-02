@@ -57,7 +57,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         silence_db=args.silence_db,
         initial_file=args.file,
     )
-    window.resize(900, 600)
+    window.resize(940, 820)
     window.show()
     if not args.no_autostart:
         window.start()

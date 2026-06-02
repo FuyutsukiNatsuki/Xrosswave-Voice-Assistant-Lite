@@ -33,6 +33,12 @@ import numpy as np
 
 from .analysis.formant import latest_formants
 from .analysis.pitch import DEFAULT_PITCH_FLOOR, latest_f0
+from .analysis.spectrogram import (
+    DEFAULT_FFT_SIZE,
+    DEFAULT_MAX_FREQ,
+    column_frequencies,
+    spectrum_column,
+)
 from .analysis.voice_quality import VoiceQuality, measure_voice_quality
 from .audio.input import DEFAULT_SAMPLERATE
 
@@ -88,7 +94,15 @@ class VoiceQualitySample:
     voice_quality: VoiceQuality
 
 
-Event = Union[PitchSample, FormantSample, VoiceQualitySample]
+@dataclass(frozen=True)
+class SpectrogramColumn:
+    """One narrowband spectrogram column (dB per frequency bin) at chunk rate."""
+
+    t: float
+    db: np.ndarray  # aligned with AnalysisPipeline.spectrogram_freqs
+
+
+Event = Union[PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn]
 
 
 class AnalysisPipeline:
@@ -106,6 +120,9 @@ class AnalysisPipeline:
         pitch_floor: float = DEFAULT_PITCH_FLOOR,
         pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
         silence_db: float = DEFAULT_SILENCE_DB,
+        spectrogram_fft_size: int = DEFAULT_FFT_SIZE,
+        spectrogram_max_freq: float = DEFAULT_MAX_FREQ,
+        spectrogram_interval_sec: float = 0.0,  # 0 = every chunk
     ) -> None:
         self.source = source
         self.samplerate = samplerate
@@ -123,13 +140,24 @@ class AnalysisPipeline:
         self._formant_interval = int(samplerate * formant_interval_sec)
         self._vq_win = int(samplerate * vq_window_sec)
         self._vq_interval = int(samplerate * vq_interval_sec)
-        self._keep = max(self._pitch_win, self._formant_win, self._vq_win)
+
+        # Narrowband spectrogram: long FFT window, emitted at chunk rate.
+        self._spec_fft = spectrogram_fft_size
+        self._spec_max_freq = spectrogram_max_freq
+        self._spec_interval = int(samplerate * spectrogram_interval_sec)
+        # Public frequency axis so the GUI can scale the waterfall's Y axis.
+        self.spectrogram_freqs = column_frequencies(
+            samplerate, spectrogram_fft_size, spectrogram_max_freq
+        )
+
+        self._keep = max(self._pitch_win, self._formant_win, self._vq_win, self._spec_fft)
 
         self._results: "queue.Queue[Event]" = queue.Queue()
         self._lock = threading.Lock()
         self._latest_pitch: Optional[PitchSample] = None
         self._latest_formant: Optional[FormantSample] = None
         self._latest_vq: Optional[VoiceQualitySample] = None
+        self._latest_spec: Optional[SpectrogramColumn] = None
 
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -195,12 +223,17 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_vq
 
+    def latest_spectrogram(self) -> Optional[SpectrogramColumn]:
+        with self._lock:
+            return self._latest_spec
+
     # -- worker ------------------------------------------------------------
     def _run(self) -> None:
         buffer = np.zeros(0, dtype=np.float32)
         total = 0           # cumulative analyzed samples (the analysis clock)
         last_formant = 0    # sample count at last formant analysis
         last_vq = 0         # sample count at last voice-quality analysis
+        last_spec = 0       # sample count at last spectrogram column
         while not self._stop.is_set():
             try:
                 chunk = self.source.read(timeout=0.2)
@@ -256,6 +289,13 @@ class AnalysisPipeline:
                     else:
                         vq = measure_voice_quality(window, self.samplerate)
                     self._emit(VoiceQualitySample(t, vq))
+
+                if buffer.size >= self._spec_fft and (total - last_spec) >= self._spec_interval:
+                    last_spec = total
+                    db = spectrum_column(
+                        buffer, self.samplerate, self._spec_fft, self._spec_max_freq
+                    )
+                    self._emit(SpectrogramColumn(t, db))
             except Exception:  # noqa: BLE001 — skip this chunk, keep streaming
                 continue
 
@@ -268,5 +308,7 @@ class AnalysisPipeline:
                 self._latest_pitch = event
             elif isinstance(event, FormantSample):
                 self._latest_formant = event
-            else:
+            elif isinstance(event, VoiceQualitySample):
                 self._latest_vq = event
+            else:
+                self._latest_spec = event

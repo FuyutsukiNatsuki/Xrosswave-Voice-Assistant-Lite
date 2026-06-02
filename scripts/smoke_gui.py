@@ -44,6 +44,7 @@ def main() -> int:
 
     pitch_n = window.pitch_plot.point_count("f0")
     formant_n = window.formant_plot.point_count("f1")
+    spec_cols = window.spectrogram_plot._count
     jitter_text = window.jitter_label.text()
     f0_text = window.readout["f0"].text()
     f1_text = window.readout["f1"].text()
@@ -51,11 +52,12 @@ def main() -> int:
         window.pipeline.stop()
     print(f"pitch points collected:   {pitch_n}")
     print(f"formant points collected: {formant_n}")
+    print(f"spectrogram columns:      {spec_cols}")
     print(f"jitter label:             {jitter_text!r}")
     print(f"readout F0 / F1:          {f0_text!r} / {f1_text!r}")
     vq_updated = "%" in jitter_text  # updated from the idle "--" placeholder
     readout_updated = any(ch.isdigit() for ch in f0_text)
-    ok = pitch_n > 0 and formant_n > 0 and vq_updated and readout_updated
+    ok = pitch_n > 0 and formant_n > 0 and spec_cols > 0 and vq_updated and readout_updated
     print("SMOKE OK" if ok else "SMOKE FAIL (missing data)")
     return 0 if ok else 1
 

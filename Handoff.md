@@ -104,6 +104,8 @@
 | 2026-06-03 | Claude Code (Opus 4.8) | **フェーズ3**: エラー処理（起動失敗ダイアログ・worker堅牢化・`pipeline.error`）、性能実測（毎チャンク解析1.05ms/予算46ms＝2%）、**.exe化（PyInstaller）成功・起動確認**、最終ドキュメント整備。全検証スイート合格 |
 | 2026-06-03 | Claude Code (Opus 4.8) | 配布調整: アプリアイコン生成(`make_icon.py`→`assets/icon.ico`)、ウィンドウ/exeに適用、単一ファイル(`-OneFile`)オプション追加。ユーザーの「DLL無し」エラーは`build\`を実行したのが原因（正解は`dist\`）と判明・案内 |
 | 2026-06-03 | Claude Code (Opus 4.8) | GitHub公開準備: README/LICENSE(GPLv3)/.gitattributes/スクショ追加。**GitHubに公開**（GPLv3, public, main, gh CLI）。URL: github.com/FuyutsukiNatsuki/Xrosswave-Voice-Assistant-Lite。生声wav等の非公開も確認 |
+| 2026-06-03 | Claude Code (Opus 4.8) | READMEにGoogle Drive配布セクション追加（SmartScreen注意含む） |
+| 2026-06-03 | Claude Code (Opus 4.8) | **機能追加: 狭帯域スペクトログラム**（`analysis/spectrogram`＋`gui/spectrogram_plot`、FFT2048≒21.5Hz分解能、スクロール式ウォーターフォール、表示ON/OFF）。3ペインをQSplitterで配置。合成音で分解能検証・スモーク合格・スクショ更新 |
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。
