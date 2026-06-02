@@ -103,6 +103,8 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `app.py` — `main()`: builds the QApplication + MainWindow (shared by dev launcher and exe).
   - `audio/input.py` — `AudioInput`: sounddevice stream → thread-safe queue of mono float32 chunks.
   - `audio/file_input.py` — `FileInput`: file → same queue contract, real-time paced, `None` sentinel at EOF.
+    Optional playback (`play`, `output_device`, live `volume`); a blocking output write paces the
+    stream; `pause`/`resume` freeze playback+analysis. Output open failure → silent fallback (`play_error`).
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
@@ -129,8 +131,8 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
     inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
-    (Microphone + input-device dropdown / Audio file + Browse…) → Start builds
-    source+pipeline; QTimer polls
+    (Microphone + input-device dropdown / Audio file + Browse… + output-device dropdown +
+    volume slider) → Start builds source+pipeline; QTimer polls
     `pipeline.drain()` → pitch plot (F0) + formant plot (F1–F4, markers); Pause/Resume →
     `pipeline.pause/resume`; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔
     Extended (2100 Hz/C7) live. Numeric readout shows F0 + F1–F4 (color-matched).

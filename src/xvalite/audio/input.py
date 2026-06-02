@@ -38,6 +38,22 @@ def list_input_devices() -> List[Tuple[int, str]]:
     ]
 
 
+def list_output_devices() -> List[Tuple[int, str]]:
+    """Return ``(index, name)`` for every output-capable audio device.
+
+    Empty if enumeration fails. Passing ``device=None`` uses the system default.
+    """
+    try:
+        devices = sd.query_devices()
+    except Exception:  # noqa: BLE001
+        return []
+    return [
+        (idx, d["name"])
+        for idx, d in enumerate(devices)
+        if d.get("max_output_channels", 0) > 0
+    ]
+
+
 class AudioInput:
     """Capture mono audio from an input device into a queue of numpy chunks."""
 

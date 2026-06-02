@@ -21,6 +21,7 @@ import time
 from typing import Optional
 
 import numpy as np
+import sounddevice as sd
 import soundfile as sf
 
 from .input import DEFAULT_BLOCKSIZE, DEFAULT_SAMPLERATE
@@ -31,6 +32,12 @@ class FileInput:
 
     Mirrors ``AudioInput``'s ``start`` / ``read`` / ``stop`` interface. A
     ``None`` sentinel is enqueued once the file is exhausted.
+
+    Optional playback: when ``play`` is set, each chunk is also written to an
+    output device (scaled by ``volume``, live-adjustable). A blocking output
+    write paces the stream in real time, so playback and analysis stay in sync.
+    ``pause`` / ``resume`` freeze both. If the output device can't be opened,
+    playback is silently skipped and analysis continues (see ``play_error``).
     """
 
     def __init__(
@@ -39,14 +46,23 @@ class FileInput:
         samplerate: int = DEFAULT_SAMPLERATE,
         blocksize: int = DEFAULT_BLOCKSIZE,
         realtime: bool = True,
+        play: bool = False,
+        output_device: Optional[int] = None,
+        volume: float = 0.1,
     ) -> None:
         self.path = path
         self.samplerate = samplerate
         self.blocksize = blocksize
         self.realtime = realtime
+        self.play = play
+        self.output_device = output_device
+        self.volume = volume  # 0..1, read live by the worker
+        self.play_error: Optional[str] = None
         self._queue: "queue.Queue[Optional[np.ndarray]]" = queue.Queue()
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
+        self._paused = threading.Event()
+        self._out_stream: Optional[sd.OutputStream] = None
 
     def _load(self) -> np.ndarray:
         """Read the file, down-mix to mono, and resample to the target rate."""
@@ -70,8 +86,20 @@ class FileInput:
         for start in range(0, samples.size, self.blocksize):
             if self._stop.is_set():
                 break
-            self._queue.put(samples[start : start + self.blocksize].copy())
-            if self.realtime:
+            # Hold position while paused: both playback and analysis freeze.
+            while self._paused.is_set() and not self._stop.is_set():
+                time.sleep(0.03)
+            if self._stop.is_set():
+                break
+            chunk = samples[start : start + self.blocksize]
+            self._queue.put(chunk.copy())
+            if self._out_stream is not None:
+                try:
+                    # Blocking write paces the loop at real time.
+                    self._out_stream.write((chunk * float(self.volume)).astype(np.float32))
+                except Exception:  # noqa: BLE001 — never let an audio glitch stop analysis
+                    pass
+            elif self.realtime:
                 next_deadline += period
                 sleep_for = next_deadline - time.monotonic()
                 if sleep_for > 0:
@@ -83,10 +111,28 @@ class FileInput:
         if self._thread is not None:
             return
         samples = self._load()
+        if self.play:
+            try:
+                self._out_stream = sd.OutputStream(
+                    samplerate=self.samplerate,
+                    channels=1,
+                    dtype="float32",
+                    device=self.output_device,
+                )
+                self._out_stream.start()
+            except Exception as exc:  # noqa: BLE001 — fall back to silent analysis
+                self.play_error = str(exc)
+                self._out_stream = None
         self._thread = threading.Thread(
             target=self._worker, args=(samples,), daemon=True
         )
         self._thread.start()
+
+    def pause(self) -> None:
+        self._paused.set()
+
+    def resume(self) -> None:
+        self._paused.clear()
 
     def read(self, timeout: Optional[float] = None) -> Optional[np.ndarray]:
         """Return the next chunk, or ``None`` at end-of-stream.
@@ -98,9 +144,14 @@ class FileInput:
     def stop(self) -> None:
         """Stop streaming. Safe to call more than once."""
         self._stop.set()
+        self._paused.clear()  # release a paused worker so it can exit
         if self._thread is not None:
             self._thread.join(timeout=1.0)
             self._thread = None
+        if self._out_stream is not None:
+            self._out_stream.stop()
+            self._out_stream.close()
+            self._out_stream = None
 
     def __enter__(self) -> "FileInput":
         self.start()

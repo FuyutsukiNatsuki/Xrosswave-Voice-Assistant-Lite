@@ -19,7 +19,14 @@ from PySide6 import QtCore, QtWidgets
 from ..analysis.spectrogram import column_frequencies
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..audio.file_input import FileInput
-from ..audio.input import DEFAULT_SAMPLERATE, AudioInput, list_input_devices
+from ..audio.input import (
+    DEFAULT_SAMPLERATE,
+    AudioInput,
+    list_input_devices,
+    list_output_devices,
+)
+
+DEFAULT_VOLUME_PCT = 10  # quiet default for file playback
 from ..pipeline import (
     DEFAULT_F0_TRACK_CEILING,
     DEFAULT_SILENCE_DB,
@@ -139,10 +146,24 @@ class MainWindow(QtWidgets.QMainWindow):
             if pos >= 0:
                 self.device_combo.setCurrentIndex(pos)
 
-        # File picker (shown when source = Audio file).
+        # File picker + playback controls (shown when source = Audio file).
         self.browse_btn = QtWidgets.QPushButton("Browse…")
         self.browse_btn.clicked.connect(self._on_browse)
         self.file_label = QtWidgets.QLabel()
+
+        self.output_label = QtWidgets.QLabel("Output:")
+        self.output_combo = QtWidgets.QComboBox()
+        self.output_combo.addItem("Default (system)", None)
+        for idx, name in list_output_devices():
+            self.output_combo.addItem(f"{name}  (#{idx})", idx)
+
+        self.vol_label = QtWidgets.QLabel("Vol:")
+        self.vol_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
+        self.vol_slider.setRange(0, 100)
+        self.vol_slider.setValue(DEFAULT_VOLUME_PCT)
+        self.vol_slider.setFixedWidth(90)
+        self.vol_value = QtWidgets.QLabel(f"{DEFAULT_VOLUME_PCT}%")
+        self.vol_slider.valueChanged.connect(self._on_volume_changed)
 
         row.addWidget(QtWidgets.QLabel("Source:"))
         row.addWidget(self.src_combo)
@@ -150,6 +171,11 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addWidget(self.device_combo)
         row.addWidget(self.browse_btn)
         row.addWidget(self.file_label, stretch=1)
+        row.addWidget(self.output_label)
+        row.addWidget(self.output_combo)
+        row.addWidget(self.vol_label)
+        row.addWidget(self.vol_slider)
+        row.addWidget(self.vol_value)
         return row
 
     def _build_controls_row(self) -> QtWidgets.QHBoxLayout:
@@ -213,7 +239,14 @@ class MainWindow(QtWidgets.QMainWindow):
                     self, "No file", "Choose an audio file with Browse… first."
                 )
                 return None
-            return FileInput(self._file_path, samplerate=self.samplerate, realtime=True)
+            return FileInput(
+                self._file_path,
+                samplerate=self.samplerate,
+                realtime=True,
+                play=True,
+                output_device=self.output_combo.currentData(),
+                volume=self.vol_slider.value() / 100.0,
+            )
         return AudioInput(samplerate=self.samplerate, device=self.device_combo.currentData())
 
     def _start(self) -> None:
@@ -332,6 +365,13 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_spec_toggled(self, checked: bool) -> None:
         self.spectrogram_plot.setVisible(checked)
 
+    def _on_volume_changed(self, value: int) -> None:
+        self.vol_value.setText(f"{value}%")
+        # Apply live to a running file-playback source.
+        source = self.pipeline.source if self.pipeline is not None else None
+        if source is not None and hasattr(source, "volume"):
+            source.volume = value / 100.0
+
     def _on_source_changed(self, _index: int) -> None:
         self._sync_source_widgets()
 
@@ -348,6 +388,11 @@ class MainWindow(QtWidgets.QMainWindow):
         is_file = self.src_combo.currentData() == "file"
         self.browse_btn.setVisible(is_file)
         self.file_label.setVisible(is_file)
+        self.output_label.setVisible(is_file)
+        self.output_combo.setVisible(is_file)
+        self.vol_label.setVisible(is_file)
+        self.vol_slider.setVisible(is_file)
+        self.vol_value.setVisible(is_file)
         self.device_label.setVisible(not is_file)
         self.device_combo.setVisible(not is_file)
         if is_file:
@@ -361,6 +406,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.src_combo.setEnabled(not running)
         self.browse_btn.setEnabled(not running)
         self.device_combo.setEnabled(not running)
+        self.output_combo.setEnabled(not running)  # volume slider stays live
         self.pause_btn.setEnabled(running)
         if not running:
             self.pause_btn.blockSignals(True)

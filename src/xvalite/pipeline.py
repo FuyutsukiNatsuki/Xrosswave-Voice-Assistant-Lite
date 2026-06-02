@@ -182,9 +182,14 @@ class AnalysisPipeline:
 
     def pause(self) -> None:
         self._paused.set()
+        # If the source can pause itself (e.g. file playback), freeze it too.
+        if hasattr(self.source, "pause"):
+            self.source.pause()
 
     def resume(self) -> None:
         self._paused.clear()
+        if hasattr(self.source, "resume"):
+            self.source.resume()
 
     # -- state -------------------------------------------------------------
     @property

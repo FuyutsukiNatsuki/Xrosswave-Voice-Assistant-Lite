@@ -107,6 +107,7 @@
 | 2026-06-03 | Claude Code (Opus 4.8) | READMEにGoogle Drive配布セクション追加（SmartScreen注意含む） |
 | 2026-06-03 | Claude Code (Opus 4.8) | **機能追加: 狭帯域スペクトログラム**（`analysis/spectrogram`＋`gui/spectrogram_plot`、FFT2048≒21.5Hz分解能、スクロール式ウォーターフォール、表示ON/OFF）。3ペインをQSplitterで配置。合成音で分解能検証・スモーク合格・スクショ更新 |
 | 2026-06-03 | Claude Code (Opus 4.8) | ビルドスクリプトをcwd非依存に修正（PSScriptRoot基準、失敗時throw）。マイク入力デバイス選択ドロップダウン追加（`list_input_devices`、既定=システム既定、マイク選択時のみ表示） |
+| 2026-06-03 | Claude Code (Opus 4.8) | ファイル再生機能追加: `FileInput`が出力デバイスへ再生（出力デバイス選択＋音量スライダー既定10%、ライブ調整）。pauseで再生も停止（pipeline→source.pause転送）。出力失敗時は無音フォールバック。スクショ更新 |
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。
