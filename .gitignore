@@ -1,0 +1,22 @@
+# Python venv
+.venv/
+
+# Python caches
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Audio test files (large; keep out of repo)
+*.wav
+*.flac
+*.mp3
+
+# IDE / OS
+.vscode/
+.idea/
+Thumbs.db
+desktop.ini
+
+# Claude Code local settings
+.claude/settings.local.json

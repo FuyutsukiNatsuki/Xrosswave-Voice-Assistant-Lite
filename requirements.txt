@@ -1,0 +1,15 @@
+# XVALite dependencies (Python 3.11)
+
+# 音声解析（Praat ラッパー）
+praat-parselmouth
+
+# 音声入出力（マイク取得 / ファイル再生）
+sounddevice
+soundfile
+
+# 数値計算
+numpy
+
+# GUI + リアルタイムグラフ
+PySide6
+pyqtgraph
