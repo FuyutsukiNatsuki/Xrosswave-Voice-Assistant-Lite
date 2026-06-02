@@ -74,6 +74,10 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
     background thread. F0 per chunk, formants+jitter/shimmer once/sec. Results via
     `drain()` (FIFO of `PitchSample`/`SlowSample`) and `latest_pitch()`/`latest_slow()`.
     `pause()`/`resume()` halt analysis and discard audio. Timestamps are sample-count based.
+    F0 tracked up to `pitch_ceiling` (default 2100 Hz ≈ C7, for high singing) — exposed
+    as `pipeline.pitch_floor`/`pitch_ceiling` so the GUI axis matches. Trade-off: a high
+    ceiling can yield occasional octave-jump spikes on noisy/transitional frames (no
+    smoothing yet). Voice-quality periodicity keeps its own conservative ceiling.
   - `gui/scrolling_plot.py` — `ScrollingPlot`: reusable pyqtgraph time-series widget;
     multiple named series, view scrolls by latest data timestamp, NaN → gaps.
   - `gui/main_window.py` — `MainWindow`: QTimer polls `pipeline.drain()` → pitch plot;

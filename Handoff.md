@@ -95,6 +95,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | ファイル入力(`audio/file_input.FileInput`)を実装。生声 test.wav で整合性・実時間ペーシング・全解析を検証。**フェーズ1完了** |
 | 2026-06-02 | Claude Code (Opus 4.8) | 統合層(`pipeline.AnalysisPipeline`)を実装。2系統カデンス・結果ストリーム・一時停止セマンティクスを生声で検証。次はGUI |
 | 2026-06-02 | Claude Code (Opus 4.8) | GUI最小版(`gui/`)実装: ScrollingPlot＋ピッチグラフ＋Pause/Stop＋QTimerドレイン。`run_app.py`起動、`smoke_gui.py`でoffscreen自動検証（17点描画・例外なし） |
+| 2026-06-02 | Claude Code (Opus 4.8) | F0追跡＆表示上限を C7(≒2100Hz)に拡張（声エンスージアスト向け）。pipeline.pitch_floor/ceiling を公開しGUI軸と連動。トレードオフ: 高ceilingで遷移部にオクターブ誤検出が出やすい（平滑化は未実装） |
 
 ## 次にやるべきこと（TODO）
 

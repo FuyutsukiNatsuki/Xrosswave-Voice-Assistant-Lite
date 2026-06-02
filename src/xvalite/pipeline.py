@@ -31,9 +31,14 @@ from typing import List, Optional, Protocol, Union
 import numpy as np
 
 from .analysis.formant import latest_formants
-from .analysis.pitch import latest_f0
+from .analysis.pitch import DEFAULT_PITCH_FLOOR, latest_f0
 from .analysis.voice_quality import VoiceQuality, measure_voice_quality
 from .audio.input import DEFAULT_SAMPLERATE
+
+# F0 tracking ceiling for the app. Raised well above speech so high singing
+# (up to ~C7) is tracked and plottable. Voice-quality periodicity uses its own,
+# more conservative ceiling (see analysis.voice_quality) and is unaffected.
+DEFAULT_F0_TRACK_CEILING = 2100.0  # ~C7 (2093 Hz)
 
 
 class AudioSource(Protocol):
@@ -74,9 +79,14 @@ class AnalysisPipeline:
         pitch_window_sec: float = 0.12,
         slow_window_sec: float = 1.0,
         slow_interval_sec: float = 1.0,
+        pitch_floor: float = DEFAULT_PITCH_FLOOR,
+        pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
     ) -> None:
         self.source = source
         self.samplerate = samplerate
+        # Public so the GUI can match its F0 axis to the tracked range.
+        self.pitch_floor = pitch_floor
+        self.pitch_ceiling = pitch_ceiling
         self._pitch_win = int(samplerate * pitch_window_sec)
         self._slow_win = int(samplerate * slow_window_sec)
         self._slow_interval = int(samplerate * slow_interval_sec)
@@ -165,7 +175,12 @@ class AnalysisPipeline:
             t = total / self.samplerate
 
             if buffer.size >= self._pitch_win:
-                f0 = latest_f0(buffer[-self._pitch_win :], self.samplerate)
+                f0 = latest_f0(
+                    buffer[-self._pitch_win :],
+                    self.samplerate,
+                    pitch_floor=self.pitch_floor,
+                    pitch_ceiling=self.pitch_ceiling,
+                )
                 self._emit(PitchSample(t, f0))
 
             if buffer.size >= self._slow_win and (total - last_slow) >= self._slow_interval:

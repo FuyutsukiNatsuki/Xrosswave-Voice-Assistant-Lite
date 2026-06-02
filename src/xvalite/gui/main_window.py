@@ -15,9 +15,6 @@ from PySide6 import QtCore, QtWidgets
 from ..pipeline import AnalysisPipeline, PitchSample
 from .scrolling_plot import ScrollingPlot
 
-PITCH_FLOOR = 75.0
-PITCH_CEILING = 600.0
-
 
 class MainWindow(QtWidgets.QMainWindow):
     def __init__(self, pipeline: AnalysisPipeline, refresh_ms: int = 33) -> None:
@@ -43,11 +40,11 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.addWidget(self.status)
         layout.addLayout(controls)
 
-        # -- pitch plot --
+        # -- pitch plot (axis follows the pipeline's tracked F0 range) --
         self.pitch_plot = ScrollingPlot(
             title="Pitch (F0)",
             y_label="Hz",
-            y_range=(PITCH_FLOOR, PITCH_CEILING),
+            y_range=(pipeline.pitch_floor, pipeline.pitch_ceiling),
             window_sec=10.0,
         )
         self.pitch_plot.add_series("f0", pen=pg.mkPen("y", width=2), name="F0")
