@@ -71,8 +71,10 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
-    background thread. F0 per chunk, formants+jitter/shimmer once/sec. Results via
-    `drain()` (FIFO of `PitchSample`/`SlowSample`) and `latest_pitch()`/`latest_slow()`.
+    background thread. Three cadences: F0 per chunk, formants per chunk (~21 Hz),
+    jitter/shimmer once/sec (needs many glottal cycles). Results via `drain()` (FIFO of
+    `PitchSample`/`FormantSample`/`VoiceQualitySample`) and `latest_pitch()`/
+    `latest_formant()`/`latest_voice_quality()`.
     `pause()`/`resume()` halt analysis and discard audio. Timestamps are sample-count based.
     F0 tracked up to `pitch_ceiling` (default 2100 Hz ≈ C7, for high singing) — exposed
     as `pipeline.pitch_floor`/`pitch_ceiling` so the GUI axis matches. Trade-off: a high

@@ -12,6 +12,7 @@ which is how unvoiced frames / undefined formants appear.
 
 from __future__ import annotations
 
+import math
 from collections import deque
 from typing import Deque, Dict, Tuple
 
@@ -74,7 +75,13 @@ class ScrollingPlot(pg.PlotWidget):
 
     def refresh(self) -> None:
         for tq, yq, curve in self._series.values():
-            curve.setData(list(tq), list(yq))
+            ys = list(yq)
+            # An all-NaN window (e.g. sustained silence) makes pyqtgraph's symbol
+            # bounds spam "All-NaN slice" warnings; nothing to draw, so send empty.
+            if ys and not any(math.isfinite(v) for v in ys):
+                curve.setData([], [])
+            else:
+                curve.setData(list(tq), ys)
         if self._t_max > 0:
             self.setXRange(self._t_max - self.window_sec, self._t_max, padding=0)
 

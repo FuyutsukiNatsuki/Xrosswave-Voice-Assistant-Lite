@@ -13,7 +13,12 @@ import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
-from ..pipeline import AnalysisPipeline, PitchSample, SlowSample
+from ..pipeline import (
+    AnalysisPipeline,
+    FormantSample,
+    PitchSample,
+    VoiceQualitySample,
+)
 from .scrolling_plot import ScrollingPlot
 
 # Voice-quality readout styles.
@@ -117,9 +122,10 @@ class MainWindow(QtWidgets.QMainWindow):
                 self.pitch_plot.append("f0", ev.t, ev.f0)
                 if np.isfinite(ev.f0):
                     self.status.setText(f"F0: {ev.f0:.1f} Hz")
-            elif isinstance(ev, SlowSample):
+            elif isinstance(ev, FormantSample):
                 for i, (key, _name, _color) in enumerate(FORMANT_SERIES):
                     self.formant_plot.append(key, ev.t, ev.formants[i])
+            elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
         self.pitch_plot.refresh()
         self.formant_plot.refresh()

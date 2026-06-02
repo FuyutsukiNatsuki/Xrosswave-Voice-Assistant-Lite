@@ -59,7 +59,8 @@ def main() -> int:
     )
 
     clean = synth_voice(jitter=0.0, shimmer=0.0, seed=1)
-    perturbed = synth_voice(jitter=0.03, shimmer=0.10, seed=2)
+    # Inject enough perturbation to clear the (raised) warning thresholds.
+    perturbed = synth_voice(jitter=0.12, shimmer=0.28, seed=2)
 
     vq_clean = measure_voice_quality(clean, SAMPLERATE)
     vq_pert = measure_voice_quality(perturbed, SAMPLERATE)

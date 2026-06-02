@@ -73,15 +73,22 @@ class PitchSample:
 
 
 @dataclass(frozen=True)
-class SlowSample:
-    """Once-per-second formants + voice quality."""
+class FormantSample:
+    """Formants F1-F4 at the (fast) formant cadence. NaN where undefined."""
 
     t: float
-    formants: np.ndarray  # length 4, Hz, NaN where undefined
+    formants: np.ndarray  # length 4, Hz
+
+
+@dataclass(frozen=True)
+class VoiceQualitySample:
+    """Jitter/shimmer at the (slow) ~1 Hz cadence (needs many glottal cycles)."""
+
+    t: float
     voice_quality: VoiceQuality
 
 
-Event = Union[PitchSample, SlowSample]
+Event = Union[PitchSample, FormantSample, VoiceQualitySample]
 
 
 class AnalysisPipeline:
@@ -92,8 +99,10 @@ class AnalysisPipeline:
         source: AudioSource,
         samplerate: int = DEFAULT_SAMPLERATE,
         pitch_window_sec: float = 0.12,
-        slow_window_sec: float = 1.0,
-        slow_interval_sec: float = 1.0,
+        formant_window_sec: float = 0.1,
+        formant_interval_sec: float = 0.0,  # 0 = every chunk (~21.5 Hz at default blocksize)
+        vq_window_sec: float = 1.0,
+        vq_interval_sec: float = 1.0,
         pitch_floor: float = DEFAULT_PITCH_FLOOR,
         pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
         silence_db: float = DEFAULT_SILENCE_DB,
@@ -105,15 +114,22 @@ class AnalysisPipeline:
         self.pitch_ceiling = pitch_ceiling
         # Public so it can be tuned at runtime (input dead zone, dBFS).
         self.silence_db = silence_db
+
+        # Three cadences. Formants run fast (~20 Hz at the default chunk size) on
+        # a short window; voice quality stays at ~1 Hz on a 1 s window because
+        # jitter/shimmer need many glottal cycles to be stable.
         self._pitch_win = int(samplerate * pitch_window_sec)
-        self._slow_win = int(samplerate * slow_window_sec)
-        self._slow_interval = int(samplerate * slow_interval_sec)
-        self._keep = max(self._pitch_win, self._slow_win)
+        self._formant_win = int(samplerate * formant_window_sec)
+        self._formant_interval = int(samplerate * formant_interval_sec)
+        self._vq_win = int(samplerate * vq_window_sec)
+        self._vq_interval = int(samplerate * vq_interval_sec)
+        self._keep = max(self._pitch_win, self._formant_win, self._vq_win)
 
         self._results: "queue.Queue[Event]" = queue.Queue()
         self._lock = threading.Lock()
         self._latest_pitch: Optional[PitchSample] = None
-        self._latest_slow: Optional[SlowSample] = None
+        self._latest_formant: Optional[FormantSample] = None
+        self._latest_vq: Optional[VoiceQualitySample] = None
 
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -165,15 +181,20 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_pitch
 
-    def latest_slow(self) -> Optional[SlowSample]:
+    def latest_formant(self) -> Optional[FormantSample]:
         with self._lock:
-            return self._latest_slow
+            return self._latest_formant
+
+    def latest_voice_quality(self) -> Optional[VoiceQualitySample]:
+        with self._lock:
+            return self._latest_vq
 
     # -- worker ------------------------------------------------------------
     def _run(self) -> None:
         buffer = np.zeros(0, dtype=np.float32)
-        total = 0          # cumulative analyzed samples (the analysis clock)
-        last_slow = 0      # sample count at last slow analysis
+        total = 0           # cumulative analyzed samples (the analysis clock)
+        last_formant = 0    # sample count at last formant analysis
+        last_vq = 0         # sample count at last voice-quality analysis
         while not self._stop.is_set():
             try:
                 chunk = self.source.read(timeout=0.2)
@@ -205,16 +226,23 @@ class AnalysisPipeline:
                     )
                 self._emit(PitchSample(t, f0))
 
-            if buffer.size >= self._slow_win and (total - last_slow) >= self._slow_interval:
-                last_slow = total
-                window = buffer[-self._slow_win :]
+            if buffer.size >= self._formant_win and (total - last_formant) >= self._formant_interval:
+                last_formant = total
+                window = buffer[-self._formant_win :]
                 if _dbfs(window) < self.silence_db:
                     formants = np.full(4, np.nan)
-                    vq = VoiceQuality(float("nan"), float("nan"))
                 else:
                     formants = latest_formants(window, self.samplerate)
+                self._emit(FormantSample(t, formants))
+
+            if buffer.size >= self._vq_win and (total - last_vq) >= self._vq_interval:
+                last_vq = total
+                window = buffer[-self._vq_win :]
+                if _dbfs(window) < self.silence_db:
+                    vq = VoiceQuality(float("nan"), float("nan"))
+                else:
                     vq = measure_voice_quality(window, self.samplerate)
-                self._emit(SlowSample(t, formants, vq))
+                self._emit(VoiceQualitySample(t, vq))
 
         self.source.stop()
 
@@ -223,5 +251,7 @@ class AnalysisPipeline:
         with self._lock:
             if isinstance(event, PitchSample):
                 self._latest_pitch = event
+            elif isinstance(event, FormantSample):
+                self._latest_formant = event
             else:
-                self._latest_slow = event
+                self._latest_vq = event

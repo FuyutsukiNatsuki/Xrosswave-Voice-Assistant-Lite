@@ -23,7 +23,12 @@ import soundfile as sf
 
 from xvalite.audio.file_input import FileInput
 from xvalite.audio.input import DEFAULT_SAMPLERATE
-from xvalite.pipeline import AnalysisPipeline, PitchSample, SlowSample
+from xvalite.pipeline import (
+    AnalysisPipeline,
+    FormantSample,
+    PitchSample,
+    VoiceQualitySample,
+)
 
 DEFAULT_PATH = r"C:\XVALite\testdata\test.wav"
 
@@ -45,24 +50,29 @@ def part_throughput(path: str) -> bool:
     pipe.stop()
 
     pitch = [e for e in events if isinstance(e, PitchSample)]
-    slow = [e for e in events if isinstance(e, SlowSample)]
+    formant = [e for e in events if isinstance(e, FormantSample)]
+    vq = [e for e in events if isinstance(e, VoiceQualitySample)]
     voiced = [e.f0 for e in pitch if np.isfinite(e.f0)]
-    expected_slow = int(duration)  # ~1 per second
+    expected_vq = int(duration)  # ~1 per second
+    # Formants now emit per chunk (interval 0), so ~= the pitch sample count.
 
-    print(f"duration={duration:.2f}s  pitch_samples={len(pitch)}  slow_samples={len(slow)}"
-          f"  (expected slow ~{expected_slow})")
+    print(f"duration={duration:.2f}s  pitch={len(pitch)}  formant={len(formant)}"
+          f"  vq={len(vq)}  (formant ~= pitch, vq ~{expected_vq})")
     if voiced:
         print(f"F0 voiced: median={np.median(voiced):.1f} Hz  "
               f"range=[{min(voiced):.0f}, {max(voiced):.0f}]")
-    if slow:
-        last = slow[-1]
-        print(f"last slow @ t={last.t:.1f}s  F1-F4={np.round(last.formants).tolist()}  "
-              f"jitter={last.voice_quality.jitter_local:.3%}  "
+    if vq:
+        last = vq[-1]
+        print(f"last vq @ t={last.t:.1f}s  jitter={last.voice_quality.jitter_local:.3%}  "
               f"shimmer={last.voice_quality.shimmer_local:.3%}")
+    if formant:
+        lastf = formant[-1]
+        print(f"last formant @ t={lastf.t:.1f}s  F1-F4={np.round(lastf.formants).tolist()}")
 
     checks = {
         "got pitch samples": len(pitch) > 10,
-        "slow count ~ duration": abs(len(slow) - expected_slow) <= 1,
+        "formant cadence ~= pitch (per chunk)": len(formant) >= len(pitch) * 0.8,
+        "vq count ~ duration": abs(len(vq) - expected_vq) <= 1,
         "F0 in plausible voice range": bool(voiced) and 50 <= np.median(voiced) <= 500,
         "timestamps monotonic": all(
             events[i].t <= events[i + 1].t for i in range(len(events) - 1)

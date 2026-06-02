@@ -20,9 +20,12 @@ from parselmouth.praat import call
 
 from .pitch import DEFAULT_PITCH_CEILING, DEFAULT_PITCH_FLOOR
 
-# Fixed warning thresholds (fractions, not percent).
-JITTER_LOCAL_WARN = 0.0104   # 1.04 %
-SHIMMER_LOCAL_WARN = 0.0381  # 3.81 %
+# Fixed warning thresholds (fractions, not percent). Set higher than the classic
+# Praat/MDVP norms (1.04% / 3.81%): Praat "local" jitter/shimmer tend to read
+# higher than some other tools, so these are tuned to this app's metric to avoid
+# over-warning. Tunable here in one place.
+JITTER_LOCAL_WARN = 0.10   # 10 %
+SHIMMER_LOCAL_WARN = 0.15  # 15 %
 
 
 @dataclass(frozen=True)
