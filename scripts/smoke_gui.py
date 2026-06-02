@@ -48,10 +48,13 @@ def main() -> int:
 
     pitch_n = window.pitch_plot.point_count("f0")
     formant_n = window.formant_plot.point_count("f1")
+    jitter_text = window.jitter_label.text()
     window.pipeline.stop()
     print(f"pitch points collected:   {pitch_n}")
     print(f"formant points collected: {formant_n}")
-    ok = pitch_n > 0 and formant_n > 0
+    print(f"jitter label:             {jitter_text!r}")
+    vq_updated = "%" in jitter_text  # updated from the idle "--" placeholder
+    ok = pitch_n > 0 and formant_n > 0 and vq_updated
     print("SMOKE OK" if ok else "SMOKE FAIL (missing data)")
     return 0 if ok else 1
 

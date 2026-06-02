@@ -12,8 +12,15 @@ import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
+from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..pipeline import AnalysisPipeline, PitchSample, SlowSample
 from .scrolling_plot import ScrollingPlot
+
+# Voice-quality readout styles.
+_VQ_BASE = "padding: 2px 8px; border-radius: 3px; font-weight: bold;"
+VQ_STYLE_OK = _VQ_BASE + "color: #ddd;"
+VQ_STYLE_WARN = _VQ_BASE + "color: white; background: #c0392b;"
+VQ_STYLE_IDLE = _VQ_BASE + "color: #888;"
 
 # F0 range modes (ceiling in Hz). Normal tames octave jumps; extended reaches C7.
 NORMAL_CEILING = 880.0      # ~A5
@@ -59,6 +66,20 @@ class MainWindow(QtWidgets.QMainWindow):
         controls.addWidget(self.status)
         layout.addLayout(controls)
 
+        # -- voice-quality readout (updates ~1 Hz; turns red above threshold) --
+        vq_row = QtWidgets.QHBoxLayout()
+        self.jitter_label = QtWidgets.QLabel("Jitter: --")
+        self.shimmer_label = QtWidgets.QLabel("Shimmer: --")
+        self.jitter_label.setToolTip(f"warns above {JITTER_LOCAL_WARN:.2%}")
+        self.shimmer_label.setToolTip(f"warns above {SHIMMER_LOCAL_WARN:.2%}")
+        self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
+        self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
+        vq_row.addWidget(QtWidgets.QLabel("Voice quality:"))
+        vq_row.addWidget(self.jitter_label)
+        vq_row.addWidget(self.shimmer_label)
+        vq_row.addStretch(1)
+        layout.addLayout(vq_row)
+
         # -- pitch plot (axis follows the pipeline's tracked F0 range) --
         self.pitch_plot = ScrollingPlot(
             title="Pitch (F0)",
@@ -99,8 +120,25 @@ class MainWindow(QtWidgets.QMainWindow):
             elif isinstance(ev, SlowSample):
                 for i, (key, _name, _color) in enumerate(FORMANT_SERIES):
                     self.formant_plot.append(key, ev.t, ev.formants[i])
+                self._update_voice_quality(ev.voice_quality)
         self.pitch_plot.refresh()
         self.formant_plot.refresh()
+
+    def _update_voice_quality(self, vq) -> None:
+        self._set_vq_label(self.jitter_label, "Jitter", vq.jitter_local, vq.jitter_warning)
+        self._set_vq_label(
+            self.shimmer_label, "Shimmer", vq.shimmer_local, vq.shimmer_warning
+        )
+
+    @staticmethod
+    def _set_vq_label(label, name: str, value: float, warning: bool) -> None:
+        if not np.isfinite(value):
+            label.setText(f"{name}: --")
+            label.setStyleSheet(VQ_STYLE_IDLE)
+            return
+        prefix = "⚠ " if warning else ""
+        label.setText(f"{prefix}{name}: {value:.2%}")
+        label.setStyleSheet(VQ_STYLE_WARN if warning else VQ_STYLE_OK)
 
     def _on_mode_changed(self, _index: int) -> None:
         ceiling = float(self.mode_combo.currentData())

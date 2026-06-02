@@ -86,7 +86,8 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
   - `gui/main_window.py` — `MainWindow`: QTimer polls `pipeline.drain()` → pitch plot
     (F0) + formant plot (F1–F4, ~1 Hz, markers); Pause/Resume → `pipeline.pause/resume`;
     Stop; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔ Extended (2100 Hz/C7),
-    updating `pipeline.pitch_ceiling` and the pitch Y-axis live.
+    updating `pipeline.pitch_ceiling` and the pitch Y-axis live. Voice-quality panel shows
+    jitter/shimmer, turning red with ⚠ above the fixed thresholds (NaN/silence → "--").
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
   - `run_app.py` — launch the GUI (`--file PATH` for file input, else mic).
   - `smoke_gui.py` — headless (offscreen) GUI check; the visual run needs a real machine.

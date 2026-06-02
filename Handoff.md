@@ -98,6 +98,13 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | F0追跡＆表示上限を C7(≒2100Hz)に拡張（声エンスージアスト向け）。pipeline.pitch_floor/ceiling を公開しGUI軸と連動。トレードオフ: 高ceilingで遷移部にオクターブ誤検出が出やすい（平滑化は未実装） |
 | 2026-06-02 | Claude Code (Opus 4.8) | 入力デッドゾーン(`silence_db`既定-40dBFS)追加。無音窓は解析せずNaN。実測（音声~-20/無音<-44dBFS）に基づき決定、偽フレーム20個除去を確認。`--silence-db`で調整可 |
 | 2026-06-02 | Claude Code (Opus 4.8) | F0レンジ切替UI追加: 通常(≤880Hz/A5)↔拡張(≤2100Hz/C7)をドロップダウンで実行中切替（オクターブ跳ね対策）。フォルマントグラフ(F1〜F4)追加。smoke_guiで検証 |
+| 2026-06-02 | Claude Code (Opus 4.8) | Jitter/Shimmer警告表示（声質パネル、閾値超過で赤＋⚠）。smoke_guiで更新を検証。フェーズ2の主要機能ほぼ完了 |
+
+### 技術メモ: フォルマント分析の高速化余地
+- 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。
+- フォルマントはチャンク周期（blocksize2048＝約46ms≒20Hz）まで短縮可能。窓は~25〜50msで足りる（Praat標準窓25ms）。実用域は窓~100〜200ms/更新~50ms。
+- Jitter/Shimmerは複数声門周期が必要なため~300〜500ms未満は信頼性低下。1秒程度が妥当な下限。
+- 高速化するなら両者を別カデンスに分離する設計変更が必要（フォルマント高速・声質1秒維持）。
 
 ## 次にやるべきこと（TODO）
 
@@ -121,8 +128,10 @@
 - [~] GUI の骨組み（`gui/main_window.MainWindow`、Pause/Resume・Stop ボタン実装済み。**入力ソース選択UIは未**＝現状は `run_app.py --file` / 既定マイクで切替）
 - [x] リアルタイムピッチグラフ（スクロール式、`gui/scrolling_plot.ScrollingPlot`、最新タイムスタンプ基準でスクロール、無声=NaNギャップ）
 - [x] リアルタイムフォルマントグラフ（スクロール式、F1〜F4の4系列＋マーカー、1秒周期、`ScrollingPlot`再利用）
-- [ ] Jitter/Shimmer 警告表示
+- [x] Jitter/Shimmer 警告表示（声質パネル。閾値超過で赤＋⚠表示、無音時は--）
 - [x] 一時停止機能（Pause/Resume → `pipeline.pause/resume`。停止中はグラフも凍結）
+
+> フェーズ2はほぼ完了。残るは「入力ソース選択UI」（現状CLI）と、必要なら見た目調整。
 
 > GUI 検証方針: この環境では `smoke_gui.py`（offscreen で起動・pause/resume・データ受信を自動確認）で検証。実際の見た目は手元で `run_app.py` 実行が必要。
 
