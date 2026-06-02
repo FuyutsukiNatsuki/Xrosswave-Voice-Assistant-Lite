@@ -63,6 +63,14 @@ class ScrollingPlot(pg.PlotWidget):
     def set_y_range(self, lo: float, hi: float) -> None:
         self.setYRange(lo, hi)
 
+    def clear_data(self) -> None:
+        """Drop all buffered points (e.g. when switching input source)."""
+        for tq, yq, curve in self._series.values():
+            tq.clear()
+            yq.clear()
+            curve.setData([], [])
+        self._t_max = 0.0
+
     def append(self, key: str, t: float, value: float) -> None:
         tq, yq, _ = self._series[key]
         tq.append(t)

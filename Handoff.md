@@ -99,6 +99,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | 入力デッドゾーン(`silence_db`既定-40dBFS)追加。無音窓は解析せずNaN。実測（音声~-20/無音<-44dBFS）に基づき決定、偽フレーム20個除去を確認。`--silence-db`で調整可 |
 | 2026-06-02 | Claude Code (Opus 4.8) | F0レンジ切替UI追加: 通常(≤880Hz/A5)↔拡張(≤2100Hz/C7)をドロップダウンで実行中切替（オクターブ跳ね対策）。フォルマントグラフ(F1〜F4)追加。smoke_guiで検証 |
 | 2026-06-02 | Claude Code (Opus 4.8) | Jitter/Shimmer警告表示（声質パネル、閾値超過で赤＋⚠）。smoke_guiで更新を検証。フェーズ2の主要機能ほぼ完了 |
+| 2026-06-02 | Claude Code (Opus 4.8) | 警告閾値をJitter10%/Shimmer15%に変更。フォルマントをチャンク毎(~21Hz)に高速化（カデンス分離）。入力ソース選択UI追加。**フェーズ2完了** |
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。
@@ -125,13 +126,13 @@
 
 ### フェーズ 2: GUI / 可視化
 - [x] 統合層（`xvalite.pipeline.AnalysisPipeline`）— 入力源を抽象化し、F0=高頻度・フォルマント/Jitter=1秒周期でバックグラウンド解析。結果はFIFO(`drain`)＋最新スナップショットで供給。一時停止＝解析停止＆バッファクリア。サンプル数ベースの時刻。生声で全チェック合格（slow 6件/6.59秒、F0中央値250.7Hz、pause中0件→resume復帰）
-- [~] GUI の骨組み（`gui/main_window.MainWindow`、Pause/Resume・Stop ボタン実装済み。**入力ソース選択UIは未**＝現状は `run_app.py --file` / 既定マイクで切替）
+- [x] GUI の骨組み（`gui/main_window.MainWindow`、ソース選択UI=マイク/ファイル＋Browse、Start/Stop、Pause/Resume、Rangeレンジ切替。MainWindowがパイプライン生成・切替を管理。ファイル終端で自動停止）
 - [x] リアルタイムピッチグラフ（スクロール式、`gui/scrolling_plot.ScrollingPlot`、最新タイムスタンプ基準でスクロール、無声=NaNギャップ）
 - [x] リアルタイムフォルマントグラフ（スクロール式、F1〜F4の4系列＋マーカー、1秒周期、`ScrollingPlot`再利用）
 - [x] Jitter/Shimmer 警告表示（声質パネル。閾値超過で赤＋⚠表示、無音時は--）
 - [x] 一時停止機能（Pause/Resume → `pipeline.pause/resume`。停止中はグラフも凍結）
 
-> フェーズ2はほぼ完了。残るは「入力ソース選択UI」（現状CLI）と、必要なら見た目調整。
+> **フェーズ2完了**（全要件＋追加機能を実装・検証）。今後の候補: 見た目調整、フォルマント精度の追い込み、F0平滑化など。
 
 > GUI 検証方針: この環境では `smoke_gui.py`（offscreen で起動・pause/resume・データ受信を自動確認）で検証。実際の見た目は手元で `run_app.py` 実行が必要。
 

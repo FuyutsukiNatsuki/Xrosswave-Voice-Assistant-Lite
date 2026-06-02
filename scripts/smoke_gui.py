@@ -20,10 +20,8 @@ import sys  # noqa: E402
 
 from PySide6 import QtCore, QtWidgets  # noqa: E402
 
-from xvalite.audio.file_input import FileInput  # noqa: E402
 from xvalite.audio.input import DEFAULT_SAMPLERATE  # noqa: E402
 from xvalite.gui.main_window import MainWindow  # noqa: E402
-from xvalite.pipeline import AnalysisPipeline  # noqa: E402
 
 PATH = r"C:\XVALite\testdata\test.wav"
 RUN_MS = 3000
@@ -31,12 +29,10 @@ RUN_MS = 3000
 
 def main() -> int:
     app = QtWidgets.QApplication([])
-    source = FileInput(PATH, samplerate=DEFAULT_SAMPLERATE, realtime=True)
-    pipeline = AnalysisPipeline(source, samplerate=DEFAULT_SAMPLERATE)
-    window = MainWindow(pipeline)
+    window = MainWindow(samplerate=DEFAULT_SAMPLERATE, initial_file=PATH)
     window.resize(900, 600)
     window.show()
-    window.start()
+    window.start()  # auto-start with the preselected file source
 
     # Exercise the range-mode toggle, then a pause/resume cycle.
     QtCore.QTimer.singleShot(400, lambda: window.mode_combo.setCurrentIndex(0))
@@ -49,7 +45,8 @@ def main() -> int:
     pitch_n = window.pitch_plot.point_count("f0")
     formant_n = window.formant_plot.point_count("f1")
     jitter_text = window.jitter_label.text()
-    window.pipeline.stop()
+    if window.pipeline is not None:
+        window.pipeline.stop()
     print(f"pitch points collected:   {pitch_n}")
     print(f"formant points collected: {formant_n}")
     print(f"jitter label:             {jitter_text!r}")

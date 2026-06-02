@@ -1,19 +1,27 @@
-"""Main application window (phase 2A: pitch graph only).
+"""Main application window.
 
-A QTimer polls the pipeline's result stream and feeds the scrolling pitch plot.
-Pause/Resume drives the pipeline's pause (which stops analysis); since the view
-follows the latest data timestamp, the graph freezes while paused with no extra
-handling. Formant/jitter widgets are added in later steps.
+Owns the analysis pipeline lifecycle: the user picks an input source
+(microphone or audio file), then Start builds the source + pipeline and a QTimer
+polls the result stream into the scrolling pitch and formant plots and the
+voice-quality readout. Pause drives the pipeline's pause (analysis stops; the
+timestamp-driven views freeze). The F0 range dropdown switches the tracking
+ceiling live.
 """
 
 from __future__ import annotations
+
+import os
 
 import numpy as np
 import pyqtgraph as pg
 from PySide6 import QtCore, QtWidgets
 
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
+from ..audio.file_input import FileInput
+from ..audio.input import DEFAULT_SAMPLERATE, AudioInput
 from ..pipeline import (
+    DEFAULT_F0_TRACK_CEILING,
+    DEFAULT_SILENCE_DB,
     AnalysisPipeline,
     FormantSample,
     PitchSample,
@@ -35,72 +43,51 @@ EXTENDED_CEILING = 2100.0   # ~C7
 FORMANT_SERIES = [("f1", "F1", "r"), ("f2", "F2", "g"), ("f3", "F3", "c"), ("f4", "F4", "m")]
 FORMANT_Y_MAX = 5000.0
 
+AUDIO_FILE_FILTER = "Audio (*.wav *.flac *.ogg *.aiff *.aif *.mp3);;All files (*)"
+
 
 class MainWindow(QtWidgets.QMainWindow):
-    def __init__(self, pipeline: AnalysisPipeline, refresh_ms: int = 33) -> None:
+    def __init__(
+        self,
+        *,
+        samplerate: int = DEFAULT_SAMPLERATE,
+        device: int | None = None,
+        silence_db: float = DEFAULT_SILENCE_DB,
+        initial_file: str | None = None,
+        initial_ceiling: float = DEFAULT_F0_TRACK_CEILING,
+        refresh_ms: int = 33,
+    ) -> None:
         super().__init__()
-        self.pipeline = pipeline
         self.setWindowTitle("XVALite — voice trainer")
+
+        self.samplerate = samplerate
+        self.device = device
+        self.silence_db = silence_db
+        self._ceiling = initial_ceiling
+        self._file_path = initial_file
+        self.pipeline: AnalysisPipeline | None = None
+        self._running = False
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
         layout = QtWidgets.QVBoxLayout(central)
 
-        # -- controls --
-        controls = QtWidgets.QHBoxLayout()
-        self.pause_btn = QtWidgets.QPushButton("Pause")
-        self.pause_btn.setCheckable(True)
-        self.pause_btn.toggled.connect(self._on_pause_toggled)
-        self.stop_btn = QtWidgets.QPushButton("Stop")
-        self.stop_btn.clicked.connect(self._on_stop)
+        layout.addLayout(self._build_source_row())
+        layout.addLayout(self._build_controls_row())
+        layout.addLayout(self._build_vq_row())
 
-        self.mode_combo = QtWidgets.QComboBox()
-        self.mode_combo.addItem("Normal (≤880 Hz)", NORMAL_CEILING)
-        self.mode_combo.addItem("Extended (≤2100 Hz, C7)", EXTENDED_CEILING)
-        self.mode_combo.setCurrentIndex(
-            1 if pipeline.pitch_ceiling >= EXTENDED_CEILING else 0
-        )
-        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
-
-        self.status = QtWidgets.QLabel("F0: --")
-        controls.addWidget(self.pause_btn)
-        controls.addWidget(self.stop_btn)
-        controls.addWidget(QtWidgets.QLabel("Range:"))
-        controls.addWidget(self.mode_combo)
-        controls.addStretch(1)
-        controls.addWidget(self.status)
-        layout.addLayout(controls)
-
-        # -- voice-quality readout (updates ~1 Hz; turns red above threshold) --
-        vq_row = QtWidgets.QHBoxLayout()
-        self.jitter_label = QtWidgets.QLabel("Jitter: --")
-        self.shimmer_label = QtWidgets.QLabel("Shimmer: --")
-        self.jitter_label.setToolTip(f"warns above {JITTER_LOCAL_WARN:.2%}")
-        self.shimmer_label.setToolTip(f"warns above {SHIMMER_LOCAL_WARN:.2%}")
-        self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
-        self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
-        vq_row.addWidget(QtWidgets.QLabel("Voice quality:"))
-        vq_row.addWidget(self.jitter_label)
-        vq_row.addWidget(self.shimmer_label)
-        vq_row.addStretch(1)
-        layout.addLayout(vq_row)
-
-        # -- pitch plot (axis follows the pipeline's tracked F0 range) --
+        # -- pitch plot (axis follows the tracked F0 range) --
         self.pitch_plot = ScrollingPlot(
-            title="Pitch (F0)",
-            y_label="Hz",
-            y_range=(pipeline.pitch_floor, pipeline.pitch_ceiling),
-            window_sec=10.0,
+            title="Pitch (F0)", y_label="Hz",
+            y_range=(75.0, self._ceiling), window_sec=10.0,
         )
         self.pitch_plot.add_series("f0", pen=pg.mkPen("y", width=2), name="F0")
         layout.addWidget(self.pitch_plot)
 
-        # -- formant plot (F1–F4, updated ~1 Hz) --
+        # -- formant plot (F1–F4) --
         self.formant_plot = ScrollingPlot(
-            title="Formants (F1–F4)",
-            y_label="Hz",
-            y_range=(0.0, FORMANT_Y_MAX),
-            window_sec=10.0,
+            title="Formants (F1–F4)", y_label="Hz",
+            y_range=(0.0, FORMANT_Y_MAX), window_sec=10.0,
         )
         for key, name, color in FORMANT_SERIES:
             self.formant_plot.add_series(
@@ -112,11 +99,111 @@ class MainWindow(QtWidgets.QMainWindow):
         self._timer.setInterval(refresh_ms)
         self._timer.timeout.connect(self._on_tick)
 
+        self._sync_source_widgets()
+        self._set_running_ui(False)
+
+    # -- UI construction ---------------------------------------------------
+    def _build_source_row(self) -> QtWidgets.QHBoxLayout:
+        row = QtWidgets.QHBoxLayout()
+        self.src_combo = QtWidgets.QComboBox()
+        self.src_combo.addItem("Microphone", "mic")
+        self.src_combo.addItem("Audio file", "file")
+        self.src_combo.setCurrentIndex(1 if self._file_path else 0)
+        self.src_combo.currentIndexChanged.connect(self._on_source_changed)
+
+        self.browse_btn = QtWidgets.QPushButton("Browse…")
+        self.browse_btn.clicked.connect(self._on_browse)
+        self.file_label = QtWidgets.QLabel()
+
+        row.addWidget(QtWidgets.QLabel("Source:"))
+        row.addWidget(self.src_combo)
+        row.addWidget(self.browse_btn)
+        row.addWidget(self.file_label, stretch=1)
+        return row
+
+    def _build_controls_row(self) -> QtWidgets.QHBoxLayout:
+        row = QtWidgets.QHBoxLayout()
+        self.start_btn = QtWidgets.QPushButton("Start")
+        self.start_btn.clicked.connect(self._on_start_clicked)
+        self.pause_btn = QtWidgets.QPushButton("Pause")
+        self.pause_btn.setCheckable(True)
+        self.pause_btn.toggled.connect(self._on_pause_toggled)
+
+        self.mode_combo = QtWidgets.QComboBox()
+        self.mode_combo.addItem("Normal (≤880 Hz)", NORMAL_CEILING)
+        self.mode_combo.addItem("Extended (≤2100 Hz, C7)", EXTENDED_CEILING)
+        self.mode_combo.setCurrentIndex(1 if self._ceiling >= EXTENDED_CEILING else 0)
+        self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
+
+        self.status = QtWidgets.QLabel("F0: --")
+        row.addWidget(self.start_btn)
+        row.addWidget(self.pause_btn)
+        row.addWidget(QtWidgets.QLabel("Range:"))
+        row.addWidget(self.mode_combo)
+        row.addStretch(1)
+        row.addWidget(self.status)
+        return row
+
+    def _build_vq_row(self) -> QtWidgets.QHBoxLayout:
+        row = QtWidgets.QHBoxLayout()
+        self.jitter_label = QtWidgets.QLabel("Jitter: --")
+        self.shimmer_label = QtWidgets.QLabel("Shimmer: --")
+        self.jitter_label.setToolTip(f"warns above {JITTER_LOCAL_WARN:.0%}")
+        self.shimmer_label.setToolTip(f"warns above {SHIMMER_LOCAL_WARN:.0%}")
+        self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
+        self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
+        row.addWidget(QtWidgets.QLabel("Voice quality:"))
+        row.addWidget(self.jitter_label)
+        row.addWidget(self.shimmer_label)
+        row.addStretch(1)
+        return row
+
+    # -- public ------------------------------------------------------------
     def start(self) -> None:
+        """Auto-start with the current source selection (used at launch)."""
+        self._start()
+
+    # -- pipeline lifecycle ------------------------------------------------
+    def _build_source(self):
+        if self.src_combo.currentData() == "file":
+            if not self._file_path or not os.path.isfile(self._file_path):
+                QtWidgets.QMessageBox.warning(
+                    self, "No file", "Choose an audio file with Browse… first."
+                )
+                return None
+            return FileInput(self._file_path, samplerate=self.samplerate, realtime=True)
+        return AudioInput(samplerate=self.samplerate, device=self.device)
+
+    def _start(self) -> None:
+        if self._running:
+            return
+        source = self._build_source()
+        if source is None:
+            return
+        self.pipeline = AnalysisPipeline(
+            source,
+            samplerate=self.samplerate,
+            pitch_ceiling=self._ceiling,
+            silence_db=self.silence_db,
+        )
+        self.pitch_plot.clear_data()
+        self.formant_plot.clear_data()
+        self._reset_vq_labels()
         self.pipeline.start()
         self._timer.start()
+        self._set_running_ui(True)
 
+    def _stop(self) -> None:
+        self._timer.stop()
+        if self.pipeline is not None:
+            self.pipeline.stop()
+            self.pipeline = None
+        self._set_running_ui(False)
+
+    # -- timer tick --------------------------------------------------------
     def _on_tick(self) -> None:
+        if self.pipeline is None:
+            return
         for ev in self.pipeline.drain():
             if isinstance(ev, PitchSample):
                 self.pitch_plot.append("f0", ev.t, ev.f0)
@@ -129,12 +216,21 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._update_voice_quality(ev.voice_quality)
         self.pitch_plot.refresh()
         self.formant_plot.refresh()
+        if self.pipeline is not None and self.pipeline.is_finished:
+            self._stop()  # file ended: reset controls
 
+    # -- voice quality -----------------------------------------------------
     def _update_voice_quality(self, vq) -> None:
         self._set_vq_label(self.jitter_label, "Jitter", vq.jitter_local, vq.jitter_warning)
         self._set_vq_label(
             self.shimmer_label, "Shimmer", vq.shimmer_local, vq.shimmer_warning
         )
+
+    def _reset_vq_labels(self) -> None:
+        self.jitter_label.setText("Jitter: --")
+        self.shimmer_label.setText("Shimmer: --")
+        self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
+        self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
 
     @staticmethod
     def _set_vq_label(label, name: str, value: float, warning: bool) -> None:
@@ -146,13 +242,13 @@ class MainWindow(QtWidgets.QMainWindow):
         label.setText(f"{prefix}{name}: {value:.2%}")
         label.setStyleSheet(VQ_STYLE_WARN if warning else VQ_STYLE_OK)
 
-    def _on_mode_changed(self, _index: int) -> None:
-        ceiling = float(self.mode_combo.currentData())
-        # Worker reads pitch_ceiling each loop; updating the attribute suffices.
-        self.pipeline.pitch_ceiling = ceiling
-        self.pitch_plot.set_y_range(self.pipeline.pitch_floor, ceiling)
+    # -- control handlers --------------------------------------------------
+    def _on_start_clicked(self) -> None:
+        self._stop() if self._running else self._start()
 
     def _on_pause_toggled(self, checked: bool) -> None:
+        if self.pipeline is None:
+            return
         if checked:
             self.pipeline.pause()
             self.pause_btn.setText("Resume")
@@ -160,11 +256,48 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pipeline.resume()
             self.pause_btn.setText("Pause")
 
-    def _on_stop(self) -> None:
-        self._timer.stop()
-        self.pipeline.stop()
+    def _on_mode_changed(self, _index: int) -> None:
+        self._ceiling = float(self.mode_combo.currentData())
+        # Worker reads pitch_ceiling each loop; updating the attribute suffices.
+        if self.pipeline is not None:
+            self.pipeline.pitch_ceiling = self._ceiling
+        self.pitch_plot.set_y_range(75.0, self._ceiling)
+
+    def _on_source_changed(self, _index: int) -> None:
+        self._sync_source_widgets()
+
+    def _on_browse(self) -> None:
+        path, _ = QtWidgets.QFileDialog.getOpenFileName(
+            self, "Select audio file", "", AUDIO_FILE_FILTER
+        )
+        if path:
+            self._file_path = path
+            self._sync_source_widgets()
+
+    # -- UI state ----------------------------------------------------------
+    def _sync_source_widgets(self) -> None:
+        is_file = self.src_combo.currentData() == "file"
+        self.browse_btn.setVisible(is_file)
+        self.file_label.setVisible(is_file)
+        if is_file:
+            self.file_label.setText(
+                os.path.basename(self._file_path) if self._file_path else "(no file selected)"
+            )
+
+    def _set_running_ui(self, running: bool) -> None:
+        self._running = running
+        self.start_btn.setText("Stop" if running else "Start")
+        self.src_combo.setEnabled(not running)
+        self.browse_btn.setEnabled(not running)
+        self.pause_btn.setEnabled(running)
+        if not running:
+            self.pause_btn.blockSignals(True)
+            self.pause_btn.setChecked(False)
+            self.pause_btn.setText("Pause")
+            self.pause_btn.blockSignals(False)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt signature)
         self._timer.stop()
-        self.pipeline.stop()
+        if self.pipeline is not None:
+            self.pipeline.stop()
         super().closeEvent(event)
