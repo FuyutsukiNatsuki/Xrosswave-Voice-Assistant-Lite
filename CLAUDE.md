@@ -53,6 +53,12 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Verify the integration pipeline (throughput + pause semantics)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_pipeline.py [path.wav]
+
+# Launch the GUI (mic by default; --file for a recording)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\run_app.py --file testdata\test.wav
+
+# Headless GUI smoke test (offscreen)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\smoke_gui.py
 ```
 
 ## Layout
@@ -68,7 +74,13 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
     background thread. F0 per chunk, formants+jitter/shimmer once/sec. Results via
     `drain()` (FIFO of `PitchSample`/`SlowSample`) and `latest_pitch()`/`latest_slow()`.
     `pause()`/`resume()` halt analysis and discard audio. Timestamps are sample-count based.
+  - `gui/scrolling_plot.py` — `ScrollingPlot`: reusable pyqtgraph time-series widget;
+    multiple named series, view scrolls by latest data timestamp, NaN → gaps.
+  - `gui/main_window.py` — `MainWindow`: QTimer polls `pipeline.drain()` → pitch plot;
+    Pause/Resume → `pipeline.pause/resume`; Stop. (Phase 2A: pitch only.)
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
+  - `run_app.py` — launch the GUI (`--file PATH` for file input, else mic).
+  - `smoke_gui.py` — headless (offscreen) GUI check; the visual run needs a real machine.
 
 ## Notes / gotchas
 

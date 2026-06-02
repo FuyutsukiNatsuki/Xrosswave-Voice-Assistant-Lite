@@ -94,6 +94,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | Jitter/Shimmer(`analysis/voice_quality`, PointProcess)を実装。固定閾値・VoiceQuality dataclass。合成音で揺らぎ有無を検証。残るはファイル入力接続のみ |
 | 2026-06-02 | Claude Code (Opus 4.8) | ファイル入力(`audio/file_input.FileInput`)を実装。生声 test.wav で整合性・実時間ペーシング・全解析を検証。**フェーズ1完了** |
 | 2026-06-02 | Claude Code (Opus 4.8) | 統合層(`pipeline.AnalysisPipeline`)を実装。2系統カデンス・結果ストリーム・一時停止セマンティクスを生声で検証。次はGUI |
+| 2026-06-02 | Claude Code (Opus 4.8) | GUI最小版(`gui/`)実装: ScrollingPlot＋ピッチグラフ＋Pause/Stop＋QTimerドレイン。`run_app.py`起動、`smoke_gui.py`でoffscreen自動検証（17点描画・例外なし） |
 
 ## 次にやるべきこと（TODO）
 
@@ -114,11 +115,13 @@
 
 ### フェーズ 2: GUI / 可視化
 - [x] 統合層（`xvalite.pipeline.AnalysisPipeline`）— 入力源を抽象化し、F0=高頻度・フォルマント/Jitter=1秒周期でバックグラウンド解析。結果はFIFO(`drain`)＋最新スナップショットで供給。一時停止＝解析停止＆バッファクリア。サンプル数ベースの時刻。生声で全チェック合格（slow 6件/6.59秒、F0中央値250.7Hz、pause中0件→resume復帰）
-- [ ] GUI の骨組み（入力ソース選択、開始/停止、一時停止ボタン）
-- [ ] リアルタイムピッチグラフ（スクロール式）
-- [ ] リアルタイムフォルマントグラフ（スクロール式）
+- [~] GUI の骨組み（`gui/main_window.MainWindow`、Pause/Resume・Stop ボタン実装済み。**入力ソース選択UIは未**＝現状は `run_app.py --file` / 既定マイクで切替）
+- [x] リアルタイムピッチグラフ（スクロール式、`gui/scrolling_plot.ScrollingPlot`、最新タイムスタンプ基準でスクロール、無声=NaNギャップ）
+- [ ] リアルタイムフォルマントグラフ（スクロール式）← `ScrollingPlot` を4系列で再利用予定
 - [ ] Jitter/Shimmer 警告表示
-- [ ] 一時停止機能の実装
+- [x] 一時停止機能（Pause/Resume → `pipeline.pause/resume`。停止中はグラフも凍結）
+
+> GUI 検証方針: この環境では `smoke_gui.py`（offscreen で起動・pause/resume・データ受信を自動確認）で検証。実際の見た目は手元で `run_app.py` 実行が必要。
 
 ### フェーズ 3: 仕上げ
 - [ ] パフォーマンスチューニング（描画フレームレート、解析負荷）
