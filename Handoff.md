@@ -84,6 +84,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | 全設計判断を確定。Python 3.11 venv 作成、依存インストール、import/デバイス疎通確認 |
 | 2026-06-02 | Claude Code (Opus 4.8) | `.gitignore` 作成、Git 初期化・初回コミット（`8cfdca8`）。フェーズ0完了 |
 | 2026-06-02 | Claude Code (Opus 4.8) | `src/xvalite` パッケージ作成。音声入力(`AudioInput`)とF0抽出(`pitch`)を実装、検証スクリプトで疎通確認（フェーズ1の前半完了） |
+| 2026-06-02 | Claude Code (Opus 4.8) | フォルマント抽出(`analysis/formant`, Burg法)を実装。合成母音で F1〜F4 復元を検証（相対許容10%）。実機マイク用スクリプトも追加 |
 
 ## 次にやるべきこと（TODO）
 
@@ -96,7 +97,7 @@
 ### フェーズ 1: 音声パイプライン（GUI なし）
 - [x] マイクからのチャンク取得 → キュー投入を実装（`xvalite.audio.input.AudioInput`）
 - [x] Parselmouth でピッチ（F0）を抽出（`xvalite.analysis.pitch`）。合成正弦波で誤差0.00 Hz・無音=NaN を確認。マイク実機でチャンク取得も確認済み
-- [ ] フォルマント（F1〜F4）を1秒ウィンドウで抽出
+- [x] フォルマント（F1〜F4）を1秒ウィンドウで抽出（`xvalite.analysis.formant`、Burg法）。合成母音で F1〜F3 誤差約30 Hz以内・F4 も10%以内を確認
 - [ ] Jitter / Shimmer を1秒ウィンドウで算出
 - [ ] 音声ファイル入力を同パイプラインに接続（soundfile で読み、同じキュー契約に流す）
 

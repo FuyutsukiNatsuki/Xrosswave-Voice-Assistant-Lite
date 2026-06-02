@@ -35,6 +35,12 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Live mic F0 readout
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_pitch_mic.py
+
+# Verify formant extraction (deterministic, no mic needed)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_formant_synthetic.py
+
+# Live mic formant readout
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_formant_mic.py
 ```
 
 ## Layout
@@ -43,7 +49,18 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
   `sys.path` via `scripts/_bootstrap.py`; no editable install yet.
   - `audio/input.py` — `AudioInput`: sounddevice stream → thread-safe queue of mono float32 chunks.
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
+  - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
+
+## Notes / gotchas
+
+- **Formant analyzer pole budget**: `to_formant_burg` allocates `2 * num_formants`
+  LPC poles up to `maximum_formant`. If `num_formants` exceeds the formants
+  actually present, spare poles latch onto spurious peaks. The synthetic
+  verifier matches the analyzer to its 4-formant signal (`num=4`, ceiling 4500);
+  production defaults to 5 formants up to 5500 Hz for real voices.
+- Formant accuracy degrades with frequency (a few % is normal), so the verifier
+  uses a relative tolerance (max of 150 Hz and 10%), not a flat Hz bound.
 
 ## Architecture (planned)
 
