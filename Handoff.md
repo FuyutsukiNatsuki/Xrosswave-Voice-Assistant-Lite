@@ -64,11 +64,12 @@
 - 仮想環境: `C:\XVALite\.venv`（3.11.9）
 - 依存管理: `requirements.txt`（インストール済み・疎通確認済み）
   - praat-parselmouth 0.4.7 / sounddevice 0.5.5 / soundfile 0.13.1 / numpy 2.4.6 / PySide6 6.11.1 / pyqtgraph 0.14.0
-- Git リポジトリ: 未初期化
+- Git リポジトリ: 初期化済み（`master`、初回コミット `8cfdca8`）
 - 既存ファイル:
   - `CLAUDE.md` — Claude Code 向けのガイダンス
   - `Handoff.md` — このファイル
   - `requirements.txt` — 依存パッケージ
+  - `.gitignore` — `.venv/`・音声ファイル・`.claude/settings.local.json` 等を除外
 
 ### 実行環境メモ
 - venv の Python: `C:\XVALite\.venv\Scripts\python.exe`
@@ -80,7 +81,9 @@
 |------|------------|---------|
 | 2026-06-02 | Claude Code (Opus 4.8) | `CLAUDE.md` と `Handoff.md` を新規作成 |
 | 2026-06-02 | Claude Code (Opus 4.8) | アプリ要件をヒアリングし Handoff.md に概要・機能要件・アーキテクチャ方針を記述 |
-| 2026-06-02 | Claude Code (Opus 4.8) | 全設計判断を確定。Python 3.11 venv 作成、依存インストール、import/デバイス疎通確認（フェーズ0完了） |
+| 2026-06-02 | Claude Code (Opus 4.8) | 全設計判断を確定。Python 3.11 venv 作成、依存インストール、import/デバイス疎通確認 |
+| 2026-06-02 | Claude Code (Opus 4.8) | `.gitignore` 作成、Git 初期化・初回コミット（`8cfdca8`）。フェーズ0完了 |
+| 2026-06-02 | Claude Code (Opus 4.8) | `src/xvalite` パッケージ作成。音声入力(`AudioInput`)とF0抽出(`pitch`)を実装、検証スクリプトで疎通確認（フェーズ1の前半完了） |
 
 ## 次にやるべきこと（TODO）
 
@@ -88,14 +91,14 @@
 - [x] 上記「未決定の設計判断」をユーザーと確定する
 - [x] Python 環境（venv 等）と依存管理ファイルを用意する
 - [x] Parselmouth / 音声入力 / GUI ライブラリをインストールし疎通確認
-- [ ] Git リポジトリを初期化する
+- [x] Git リポジトリを初期化する
 
 ### フェーズ 1: 音声パイプライン（GUI なし）
-- [ ] マイクからのチャンク取得 → キュー投入を実装
-- [ ] Parselmouth でピッチ（F0）を抽出（コンソール出力で検証）
+- [x] マイクからのチャンク取得 → キュー投入を実装（`xvalite.audio.input.AudioInput`）
+- [x] Parselmouth でピッチ（F0）を抽出（`xvalite.analysis.pitch`）。合成正弦波で誤差0.00 Hz・無音=NaN を確認。マイク実機でチャンク取得も確認済み
 - [ ] フォルマント（F1〜F4）を1秒ウィンドウで抽出
 - [ ] Jitter / Shimmer を1秒ウィンドウで算出
-- [ ] 音声ファイル入力を同パイプラインに接続
+- [ ] 音声ファイル入力を同パイプラインに接続（soundfile で読み、同じキュー契約に流す）
 
 ### フェーズ 2: GUI / 可視化
 - [ ] GUI の骨組み（入力ソース選択、開始/停止、一時停止ボタン）

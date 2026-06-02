@@ -29,7 +29,21 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # List audio input devices
 & "C:\XVALite\.venv\Scripts\python.exe" -c "import sounddevice; print(sounddevice.query_devices())"
+
+# Verify F0 extraction (deterministic, no mic needed)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_pitch_synthetic.py
+
+# Live mic F0 readout
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_pitch_mic.py
 ```
+
+## Layout
+
+- `src/xvalite/` — the package (src layout). Verification scripts add `src/` to
+  `sys.path` via `scripts/_bootstrap.py`; no editable install yet.
+  - `audio/input.py` — `AudioInput`: sounddevice stream → thread-safe queue of mono float32 chunks.
+  - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
+- `scripts/` — runnable verification/smoke scripts (not part of the package).
 
 ## Architecture (planned)
 
