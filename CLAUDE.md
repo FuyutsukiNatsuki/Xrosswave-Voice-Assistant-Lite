@@ -50,6 +50,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Verify file input + full analysis on a recording (defaults to testdata\test.wav)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_file_input.py [path.wav]
+
+# Verify the integration pipeline (throughput + pause semantics)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_pipeline.py [path.wav]
 ```
 
 ## Layout
@@ -61,6 +64,10 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
+  - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
+    background thread. F0 per chunk, formants+jitter/shimmer once/sec. Results via
+    `drain()` (FIFO of `PitchSample`/`SlowSample`) and `latest_pitch()`/`latest_slow()`.
+    `pause()`/`resume()` halt analysis and discard audio. Timestamps are sample-count based.
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
 
 ## Notes / gotchas

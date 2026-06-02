@@ -93,6 +93,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | フォルマント抽出(`analysis/formant`, Burg法)を実装。合成母音で F1〜F4 復元を検証（相対許容10%）。実機マイク用スクリプトも追加 |
 | 2026-06-02 | Claude Code (Opus 4.8) | Jitter/Shimmer(`analysis/voice_quality`, PointProcess)を実装。固定閾値・VoiceQuality dataclass。合成音で揺らぎ有無を検証。残るはファイル入力接続のみ |
 | 2026-06-02 | Claude Code (Opus 4.8) | ファイル入力(`audio/file_input.FileInput`)を実装。生声 test.wav で整合性・実時間ペーシング・全解析を検証。**フェーズ1完了** |
+| 2026-06-02 | Claude Code (Opus 4.8) | 統合層(`pipeline.AnalysisPipeline`)を実装。2系統カデンス・結果ストリーム・一時停止セマンティクスを生声で検証。次はGUI |
 
 ## 次にやるべきこと（TODO）
 
@@ -112,6 +113,7 @@
 **→ フェーズ1完了。** 生声検証で母音 い/え/お/あ/う のフォルマント軌跡が音声学的に妥当（F1/F2 が母音ごとに想定どおり推移）、F0≈250 Hz 安定、Jitter<1%・Shimmer概ね閾値内を確認。
 
 ### フェーズ 2: GUI / 可視化
+- [x] 統合層（`xvalite.pipeline.AnalysisPipeline`）— 入力源を抽象化し、F0=高頻度・フォルマント/Jitter=1秒周期でバックグラウンド解析。結果はFIFO(`drain`)＋最新スナップショットで供給。一時停止＝解析停止＆バッファクリア。サンプル数ベースの時刻。生声で全チェック合格（slow 6件/6.59秒、F0中央値250.7Hz、pause中0件→resume復帰）
 - [ ] GUI の骨組み（入力ソース選択、開始/停止、一時停止ボタン）
 - [ ] リアルタイムピッチグラフ（スクロール式）
 - [ ] リアルタイムフォルマントグラフ（スクロール式）
