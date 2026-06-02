@@ -12,13 +12,30 @@ same queue contract in a later step.
 from __future__ import annotations
 
 import queue
-from typing import Optional
+from typing import List, Optional, Tuple
 
 import numpy as np
 import sounddevice as sd
 
 DEFAULT_SAMPLERATE = 44100
 DEFAULT_BLOCKSIZE = 2048  # ~46 ms at 44.1 kHz
+
+
+def list_input_devices() -> List[Tuple[int, str]]:
+    """Return ``(index, name)`` for every input-capable audio device.
+
+    Empty if enumeration fails (e.g. no audio backend). Passing ``device=None``
+    to :class:`AudioInput` always uses the system default.
+    """
+    try:
+        devices = sd.query_devices()
+    except Exception:  # noqa: BLE001
+        return []
+    return [
+        (idx, d["name"])
+        for idx, d in enumerate(devices)
+        if d.get("max_input_channels", 0) > 0
+    ]
 
 
 class AudioInput:

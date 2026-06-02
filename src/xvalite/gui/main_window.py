@@ -19,7 +19,7 @@ from PySide6 import QtCore, QtWidgets
 from ..analysis.spectrogram import column_frequencies
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..audio.file_input import FileInput
-from ..audio.input import DEFAULT_SAMPLERATE, AudioInput
+from ..audio.input import DEFAULT_SAMPLERATE, AudioInput, list_input_devices
 from ..pipeline import (
     DEFAULT_F0_TRACK_CEILING,
     DEFAULT_SILENCE_DB,
@@ -128,12 +128,26 @@ class MainWindow(QtWidgets.QMainWindow):
         self.src_combo.setCurrentIndex(1 if self._file_path else 0)
         self.src_combo.currentIndexChanged.connect(self._on_source_changed)
 
+        # Microphone device picker (shown when source = Microphone).
+        self.device_label = QtWidgets.QLabel("Device:")
+        self.device_combo = QtWidgets.QComboBox()
+        self.device_combo.addItem("Default (system)", None)
+        for idx, name in list_input_devices():
+            self.device_combo.addItem(f"{name}  (#{idx})", idx)
+        if self.device is not None:
+            pos = self.device_combo.findData(self.device)
+            if pos >= 0:
+                self.device_combo.setCurrentIndex(pos)
+
+        # File picker (shown when source = Audio file).
         self.browse_btn = QtWidgets.QPushButton("Browse…")
         self.browse_btn.clicked.connect(self._on_browse)
         self.file_label = QtWidgets.QLabel()
 
         row.addWidget(QtWidgets.QLabel("Source:"))
         row.addWidget(self.src_combo)
+        row.addWidget(self.device_label)
+        row.addWidget(self.device_combo)
         row.addWidget(self.browse_btn)
         row.addWidget(self.file_label, stretch=1)
         return row
@@ -200,7 +214,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 )
                 return None
             return FileInput(self._file_path, samplerate=self.samplerate, realtime=True)
-        return AudioInput(samplerate=self.samplerate, device=self.device)
+        return AudioInput(samplerate=self.samplerate, device=self.device_combo.currentData())
 
     def _start(self) -> None:
         if self._running:
@@ -334,6 +348,8 @@ class MainWindow(QtWidgets.QMainWindow):
         is_file = self.src_combo.currentData() == "file"
         self.browse_btn.setVisible(is_file)
         self.file_label.setVisible(is_file)
+        self.device_label.setVisible(not is_file)
+        self.device_combo.setVisible(not is_file)
         if is_file:
             self.file_label.setText(
                 os.path.basename(self._file_path) if self._file_path else "(no file selected)"
@@ -344,6 +360,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.start_btn.setText("Stop" if running else "Start")
         self.src_combo.setEnabled(not running)
         self.browse_btn.setEnabled(not running)
+        self.device_combo.setEnabled(not running)
         self.pause_btn.setEnabled(running)
         if not running:
             self.pause_btn.blockSignals(True)

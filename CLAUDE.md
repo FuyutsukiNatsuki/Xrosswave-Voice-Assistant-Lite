@@ -129,7 +129,8 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
     inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
-    (Microphone / Audio file + Browse…) → Start builds source+pipeline; QTimer polls
+    (Microphone + input-device dropdown / Audio file + Browse…) → Start builds
+    source+pipeline; QTimer polls
     `pipeline.drain()` → pitch plot (F0) + formant plot (F1–F4, markers); Pause/Resume →
     `pipeline.pause/resume`; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔
     Extended (2100 Hz/C7) live. Numeric readout shows F0 + F1–F4 (color-matched).
