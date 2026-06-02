@@ -47,6 +47,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Live mic jitter/shimmer readout
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_quality_mic.py
+
+# Verify file input + full analysis on a recording (defaults to testdata\test.wav)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_file_input.py [path.wav]
 ```
 
 ## Layout
@@ -54,6 +57,7 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 - `src/xvalite/` — the package (src layout). Verification scripts add `src/` to
   `sys.path` via `scripts/_bootstrap.py`; no editable install yet.
   - `audio/input.py` — `AudioInput`: sounddevice stream → thread-safe queue of mono float32 chunks.
+  - `audio/file_input.py` — `FileInput`: file → same queue contract, real-time paced, `None` sentinel at EOF.
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).

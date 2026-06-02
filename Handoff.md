@@ -76,9 +76,10 @@
 - 入力デバイスは検出済み（Yamaha AG06MK2 等）。`sounddevice.query_devices()` で列挙可能。
 
 ### テストデータ
-- ユーザーが実声の母音（い/え/お/あ/う、各2〜3秒持続）の WAV を `C:\XVALite\testdata\` に提供予定。
-- `*.wav` は `.gitignore` 済み（個人音声はリポジトリに含めない）。
+- `C:\XVALite\testdata\test.wav` — ユーザー提供の実声（母音 い/え/お/あ/う、44100 Hz / モノ / 6.59秒 / PCM_16）。
+- `*.wav` は `.gitignore` 済み（個人音声はリポジトリに含めない＝他環境では別途配置が必要）。
 - 用途: ファイル入力パイプラインの実データ検証 / フォルマントの母音別妥当性確認 / Jitter・Shimmer の実声レンジ確認。
+- 検証コマンド: `scripts\verify_file_input.py`（整合性・ペーシング・1秒窓の全解析を一括実行）。
 
 ## 直近の作業ログ
 
@@ -91,6 +92,7 @@
 | 2026-06-02 | Claude Code (Opus 4.8) | `src/xvalite` パッケージ作成。音声入力(`AudioInput`)とF0抽出(`pitch`)を実装、検証スクリプトで疎通確認（フェーズ1の前半完了） |
 | 2026-06-02 | Claude Code (Opus 4.8) | フォルマント抽出(`analysis/formant`, Burg法)を実装。合成母音で F1〜F4 復元を検証（相対許容10%）。実機マイク用スクリプトも追加 |
 | 2026-06-02 | Claude Code (Opus 4.8) | Jitter/Shimmer(`analysis/voice_quality`, PointProcess)を実装。固定閾値・VoiceQuality dataclass。合成音で揺らぎ有無を検証。残るはファイル入力接続のみ |
+| 2026-06-02 | Claude Code (Opus 4.8) | ファイル入力(`audio/file_input.FileInput`)を実装。生声 test.wav で整合性・実時間ペーシング・全解析を検証。**フェーズ1完了** |
 
 ## 次にやるべきこと（TODO）
 
@@ -105,7 +107,9 @@
 - [x] Parselmouth でピッチ（F0）を抽出（`xvalite.analysis.pitch`）。合成正弦波で誤差0.00 Hz・無音=NaN を確認。マイク実機でチャンク取得も確認済み
 - [x] フォルマント（F1〜F4）を1秒ウィンドウで抽出（`xvalite.analysis.formant`、Burg法）。合成母音で F1〜F3 誤差約30 Hz以内・F4 も10%以内を確認
 - [x] Jitter / Shimmer を1秒ウィンドウで算出（`xvalite.analysis.voice_quality`、PointProcess）。固定閾値（jitter>1.04% / shimmer>3.81%）。揺らぎ無し=0%・注入量3%/10%→測定3.22%/9.23%で検証
-- [ ] 音声ファイル入力を同パイプラインに接続（soundfile で読み、同じキュー契約に流す）
+- [x] 音声ファイル入力を同パイプラインに接続（`xvalite.audio.file_input.FileInput`、soundfile、実時間ペース、終端=None）。生声 `testdata/test.wav` で整合性・ペーシング・全解析を確認
+
+**→ フェーズ1完了。** 生声検証で母音 い/え/お/あ/う のフォルマント軌跡が音声学的に妥当（F1/F2 が母音ごとに想定どおり推移）、F0≈250 Hz 安定、Jitter<1%・Shimmer概ね閾値内を確認。
 
 ### フェーズ 2: GUI / 可視化
 - [ ] GUI の骨組み（入力ソース選択、開始/停止、一時停止ボタン）
