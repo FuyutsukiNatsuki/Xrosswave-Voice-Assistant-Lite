@@ -59,12 +59,35 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 
 # Headless GUI smoke test (offscreen)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\smoke_gui.py
+
+# Headless error-path smoke test (bad file → dialog, no crash)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\smoke_errors.py
+
+# Benchmark per-chunk analysis cost vs the real-time budget
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\bench_analysis.py
 ```
+
+## Packaging (.exe)
+
+```powershell
+# One-time: install build deps
+& "C:\XVALite\.venv\Scripts\python.exe" -m pip install -r requirements-dev.txt
+
+# Build → dist\XVALite\XVALite.exe (one-dir; ship the whole XVALite folder, ~196 MB)
+powershell -ExecutionPolicy Bypass -File scripts\build_exe.ps1
+```
+
+`xvalite_app.py` is the frozen entry point; `src/xvalite/app.py:main` is the shared
+launch logic (dev launcher and exe both call it). The build collects soundfile /
+sounddevice / parselmouth binaries (libsndfile, PortAudio, the Praat extension).
+Verified to launch; ~1 ms/chunk analysis vs a 46 ms budget (2%), so real time is
+comfortable.
 
 ## Layout
 
 - `src/xvalite/` — the package (src layout). Verification scripts add `src/` to
   `sys.path` via `scripts/_bootstrap.py`; no editable install yet.
+  - `app.py` — `main()`: builds the QApplication + MainWindow (shared by dev launcher and exe).
   - `audio/input.py` — `AudioInput`: sounddevice stream → thread-safe queue of mono float32 chunks.
   - `audio/file_input.py` — `FileInput`: file → same queue contract, real-time paced, `None` sentinel at EOF.
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
@@ -74,7 +97,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
     background thread. Three cadences: F0 per chunk, formants per chunk (~21 Hz),
     jitter/shimmer once/sec (needs many glottal cycles). Results via `drain()` (FIFO of
     `PitchSample`/`FormantSample`/`VoiceQualitySample`) and `latest_pitch()`/
-    `latest_formant()`/`latest_voice_quality()`.
+    `latest_formant()`/`latest_voice_quality()`. Start-time source failures raise out of
+    `start()`; mid-stream source failures set `pipeline.error` and finish; per-chunk
+    analysis errors skip that chunk.
     `pause()`/`resume()` halt analysis and discard audio. Timestamps are sample-count based.
     F0 tracked up to `pitch_ceiling` (default 2100 Hz ≈ C7, for high singing) — exposed
     as `pipeline.pitch_floor`/`pitch_ceiling` so the GUI axis matches. Trade-off: a high

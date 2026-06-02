@@ -1,0 +1,5 @@
+# Dev/build-only dependencies (not needed to run from source).
+-r requirements.txt
+
+# Packaging the app into a standalone executable.
+pyinstaller

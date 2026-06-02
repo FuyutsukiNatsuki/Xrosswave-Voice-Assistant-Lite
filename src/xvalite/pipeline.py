@@ -135,6 +135,7 @@ class AnalysisPipeline:
         self._stop = threading.Event()
         self._paused = threading.Event()
         self._finished = threading.Event()
+        self._error: Optional[str] = None  # set if the worker dies unexpectedly
 
     # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
@@ -165,6 +166,11 @@ class AnalysisPipeline:
     @property
     def is_finished(self) -> bool:
         return self._finished.is_set()
+
+    @property
+    def error(self) -> Optional[str]:
+        """Error message if the worker stopped unexpectedly, else None."""
+        return self._error
 
     # -- results -----------------------------------------------------------
     def drain(self) -> List[Event]:
@@ -200,6 +206,10 @@ class AnalysisPipeline:
                 chunk = self.source.read(timeout=0.2)
             except queue.Empty:
                 continue
+            except Exception as exc:  # source failed mid-stream
+                self._error = f"audio source error: {exc}"
+                self._finished.set()
+                break
             if chunk is None:  # end of stream (file source)
                 self._finished.set()
                 break
@@ -213,36 +223,41 @@ class AnalysisPipeline:
             buffer = np.concatenate([buffer, chunk])[-self._keep :]
             t = total / self.samplerate
 
-            if buffer.size >= self._pitch_win:
-                window = buffer[-self._pitch_win :]
-                if _dbfs(window) < self.silence_db:
-                    f0 = float("nan")  # below the dead zone: treat as silence
-                else:
-                    f0 = latest_f0(
-                        window,
-                        self.samplerate,
-                        pitch_floor=self.pitch_floor,
-                        pitch_ceiling=self.pitch_ceiling,
-                    )
-                self._emit(PitchSample(t, f0))
+            # Analysis errors on a bad window should skip that chunk, not kill
+            # the worker. Parselmouth's formant/VQ calls already guard internally.
+            try:
+                if buffer.size >= self._pitch_win:
+                    window = buffer[-self._pitch_win :]
+                    if _dbfs(window) < self.silence_db:
+                        f0 = float("nan")  # below the dead zone: treat as silence
+                    else:
+                        f0 = latest_f0(
+                            window,
+                            self.samplerate,
+                            pitch_floor=self.pitch_floor,
+                            pitch_ceiling=self.pitch_ceiling,
+                        )
+                    self._emit(PitchSample(t, f0))
 
-            if buffer.size >= self._formant_win and (total - last_formant) >= self._formant_interval:
-                last_formant = total
-                window = buffer[-self._formant_win :]
-                if _dbfs(window) < self.silence_db:
-                    formants = np.full(4, np.nan)
-                else:
-                    formants = latest_formants(window, self.samplerate)
-                self._emit(FormantSample(t, formants))
+                if buffer.size >= self._formant_win and (total - last_formant) >= self._formant_interval:
+                    last_formant = total
+                    window = buffer[-self._formant_win :]
+                    if _dbfs(window) < self.silence_db:
+                        formants = np.full(4, np.nan)
+                    else:
+                        formants = latest_formants(window, self.samplerate)
+                    self._emit(FormantSample(t, formants))
 
-            if buffer.size >= self._vq_win and (total - last_vq) >= self._vq_interval:
-                last_vq = total
-                window = buffer[-self._vq_win :]
-                if _dbfs(window) < self.silence_db:
-                    vq = VoiceQuality(float("nan"), float("nan"))
-                else:
-                    vq = measure_voice_quality(window, self.samplerate)
-                self._emit(VoiceQualitySample(t, vq))
+                if buffer.size >= self._vq_win and (total - last_vq) >= self._vq_interval:
+                    last_vq = total
+                    window = buffer[-self._vq_win :]
+                    if _dbfs(window) < self.silence_db:
+                        vq = VoiceQuality(float("nan"), float("nan"))
+                    else:
+                        vq = measure_voice_quality(window, self.samplerate)
+                    self._emit(VoiceQualitySample(t, vq))
+            except Exception:  # noqa: BLE001 — skip this chunk, keep streaming
+                continue
 
         self.source.stop()
 

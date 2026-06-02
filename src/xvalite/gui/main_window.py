@@ -192,17 +192,24 @@ class MainWindow(QtWidgets.QMainWindow):
         source = self._build_source()
         if source is None:
             return
-        self.pipeline = AnalysisPipeline(
+        pipeline = AnalysisPipeline(
             source,
             samplerate=self.samplerate,
             pitch_ceiling=self._ceiling,
             silence_db=self.silence_db,
         )
+        try:
+            pipeline.start()  # opens the device / loads the file; may raise
+        except Exception as exc:  # noqa: BLE001
+            QtWidgets.QMessageBox.critical(
+                self, "Could not start", f"Failed to start audio input:\n\n{exc}"
+            )
+            return
+        self.pipeline = pipeline
         self.pitch_plot.clear_data()
         self.formant_plot.clear_data()
         self._reset_vq_labels()
         self._reset_readout()
-        self.pipeline.start()
         self._timer.start()
         self._set_running_ui(True)
 
@@ -230,7 +237,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pitch_plot.refresh()
         self.formant_plot.refresh()
         if self.pipeline is not None and self.pipeline.is_finished:
-            self._stop()  # file ended: reset controls
+            error = self.pipeline.error
+            self._stop()  # file ended (or source failed): reset controls
+            if error:
+                QtWidgets.QMessageBox.warning(self, "Input stopped", error)
 
     def _set_readout(self, key: str, value: float) -> None:
         text = f"{key.upper()}: {value:.0f}" if np.isfinite(value) else f"{key.upper()}: --"
