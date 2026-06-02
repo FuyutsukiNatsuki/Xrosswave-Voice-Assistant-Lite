@@ -29,6 +29,10 @@
 ## インストールと実行（ソースから）
 
 ```powershell
+# リポジトリを取得
+git clone https://github.com/FuyutsukiNatsuki/Xrosswave-Voice-Assistant-Lite.git
+cd Xrosswave-Voice-Assistant-Lite
+
 # 仮想環境を作成（Python 3.11）
 py -3.11 -m venv .venv
 
