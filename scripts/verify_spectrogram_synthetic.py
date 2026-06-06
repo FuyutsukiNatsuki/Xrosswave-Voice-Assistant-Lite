@@ -41,7 +41,7 @@ def local_peaks(db, freqs, min_prominence_db=12.0):
 def main() -> int:
     freqs = column_frequencies(SR)
     res = SR / DEFAULT_FFT_SIZE
-    print(f"fft_size={DEFAULT_FFT_SIZE}  resolution={res:.1f} Hz  bins<=5kHz={freqs.size}\n")
+    print(f"fft_size={DEFAULT_FFT_SIZE}  resolution={res:.1f} Hz  bins={freqs.size}\n")
 
     # 1) Pure tone peaks at its frequency.
     db = spectrum_column(tone([440.0]), SR)

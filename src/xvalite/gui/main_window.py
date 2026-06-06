@@ -14,9 +14,14 @@ import os
 
 import numpy as np
 import pyqtgraph as pg
-from PySide6 import QtCore, QtWidgets
+from PySide6 import QtCore, QtGui, QtWidgets
 
-from ..analysis.spectrogram import column_frequencies
+from ..analysis.spectrogram import (
+    DEFAULT_MAX_FREQ,
+    NARROWBAND_FFT,
+    WIDEBAND_FFT,
+    column_frequencies,
+)
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..audio.file_input import FileInput
 from ..audio.input import (
@@ -25,10 +30,8 @@ from ..audio.input import (
     list_input_devices,
     list_output_devices,
 )
-
-DEFAULT_VOLUME_PCT = 10  # quiet default for file playback
+from ..config import load_config, save_config
 from ..pipeline import (
-    DEFAULT_F0_TRACK_CEILING,
     DEFAULT_SILENCE_DB,
     AnalysisPipeline,
     FormantSample,
@@ -51,7 +54,15 @@ EXTENDED_CEILING = 2100.0   # ~C7
 
 # Formant series: key, display name, color.
 FORMANT_SERIES = [("f1", "F1", "r"), ("f2", "F2", "g"), ("f3", "F3", "c"), ("f4", "F4", "m")]
-FORMANT_Y_MAX = 5000.0
+FORMANT_Y_MAX = 6400.0
+
+# Selectable plot panes (config key, menu label).
+PANELS = [
+    ("pitch", "Pitch (F0)"),
+    ("formants", "Formants (F1–F4)"),
+    ("narrowband", "Spectrogram — narrowband"),
+    ("wideband", "Spectrogram — wideband"),
+]
 
 # Numeric readout colors (match the plot pens; bright for a dark background).
 READOUT_SERIES = [
@@ -60,6 +71,7 @@ READOUT_SERIES = [
 ]
 
 AUDIO_FILE_FILTER = "Audio (*.wav *.flac *.ogg *.aiff *.aif *.mp3);;All files (*)"
+DEFAULT_VOLUME_PCT = 10  # quiet default for file playback
 
 
 class MainWindow(QtWidgets.QMainWindow):
@@ -70,19 +82,23 @@ class MainWindow(QtWidgets.QMainWindow):
         device: int | None = None,
         silence_db: float = DEFAULT_SILENCE_DB,
         initial_file: str | None = None,
-        initial_ceiling: float = DEFAULT_F0_TRACK_CEILING,
         refresh_ms: int = 33,
     ) -> None:
         super().__init__()
         self.setWindowTitle("XVALite — voice trainer")
 
+        self._config = load_config()
+        self._loaded = False  # gate config saves during construction
+
         self.samplerate = samplerate
         self.device = device
         self.silence_db = silence_db
-        self._ceiling = initial_ceiling
         self._file_path = initial_file
         self.pipeline: AnalysisPipeline | None = None
         self._running = False
+        self._ceiling = (
+            EXTENDED_CEILING if self._config["range_mode"] == "extended" else NORMAL_CEILING
+        )
 
         central = QtWidgets.QWidget()
         self.setCentralWidget(central)
@@ -92,7 +108,7 @@ class MainWindow(QtWidgets.QMainWindow):
         layout.addLayout(self._build_controls_row())
         layout.addLayout(self._build_vq_row())
 
-        # -- plots in a resizable vertical splitter --
+        # -- four selectable plot panes in a resizable vertical splitter --
         self.pitch_plot = ScrollingPlot(
             title="Pitch (F0)", y_label="Hz",
             y_range=(75.0, self._ceiling), window_sec=10.0,
@@ -108,23 +124,36 @@ class MainWindow(QtWidgets.QMainWindow):
                 key, pen=pg.mkPen(color, width=2), name=name, symbol="o", symbol_size=6
             )
 
-        self.spectrogram_plot = SpectrogramPlot(
-            column_frequencies(self.samplerate), window_sec=10.0
+        self.spectrogram_narrow = SpectrogramPlot(
+            column_frequencies(self.samplerate, NARROWBAND_FFT, DEFAULT_MAX_FREQ),
+            window_sec=10.0, title="Spectrogram (narrowband)",
+        )
+        self.spectrogram_wide = SpectrogramPlot(
+            column_frequencies(self.samplerate, WIDEBAND_FFT, DEFAULT_MAX_FREQ),
+            window_sec=10.0, title="Spectrogram (wideband)",
         )
 
-        splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
-        splitter.addWidget(self.pitch_plot)
-        splitter.addWidget(self.formant_plot)
-        splitter.addWidget(self.spectrogram_plot)
-        splitter.setSizes([220, 220, 240])
-        layout.addWidget(splitter, stretch=1)
+        self._panel_widgets = {
+            "pitch": self.pitch_plot,
+            "formants": self.formant_plot,
+            "narrowband": self.spectrogram_narrow,
+            "wideband": self.spectrogram_wide,
+        }
+        self._splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        for key, _label in PANELS:
+            self._splitter.addWidget(self._panel_widgets[key])
+        layout.addWidget(self._splitter, stretch=1)
+
+        self._build_view_menu()
 
         self._timer = QtCore.QTimer(self)
         self._timer.setInterval(refresh_ms)
         self._timer.timeout.connect(self._on_tick)
 
+        self._apply_config()
         self._sync_source_widgets()
         self._set_running_ui(False)
+        self._loaded = True
 
     # -- UI construction ---------------------------------------------------
     def _build_source_row(self) -> QtWidgets.QHBoxLayout:
@@ -145,6 +174,7 @@ class MainWindow(QtWidgets.QMainWindow):
             pos = self.device_combo.findData(self.device)
             if pos >= 0:
                 self.device_combo.setCurrentIndex(pos)
+        self.device_combo.currentIndexChanged.connect(self._on_device_changed)
 
         # File picker + playback controls (shown when source = Audio file).
         self.browse_btn = QtWidgets.QPushButton("Browse…")
@@ -156,6 +186,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.output_combo.addItem("Default (system)", None)
         for idx, name in list_output_devices():
             self.output_combo.addItem(f"{name}  (#{idx})", idx)
+        self.output_combo.currentIndexChanged.connect(self._on_device_changed)
 
         self.vol_label = QtWidgets.QLabel("Vol:")
         self.vol_slider = QtWidgets.QSlider(QtCore.Qt.Horizontal)
@@ -192,15 +223,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(1 if self._ceiling >= EXTENDED_CEILING else 0)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
-        self.spec_check = QtWidgets.QCheckBox("Spectrogram")
-        self.spec_check.setChecked(True)
-        self.spec_check.toggled.connect(self._on_spec_toggled)
-
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
         row.addWidget(QtWidgets.QLabel("Range:"))
         row.addWidget(self.mode_combo)
-        row.addWidget(self.spec_check)
         row.addStretch(1)
 
         # Numeric readout: F0 + F1–F4, color-matched to the plots.
@@ -271,7 +297,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.pipeline = pipeline
         self.pitch_plot.clear_data()
         self.formant_plot.clear_data()
-        self.spectrogram_plot.clear_data()
+        self.spectrogram_narrow.clear_data()
+        self.spectrogram_wide.clear_data()
         self._reset_vq_labels()
         self._reset_readout()
         self._timer.start()
@@ -299,11 +326,16 @@ class MainWindow(QtWidgets.QMainWindow):
             elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
             elif isinstance(ev, SpectrogramColumn):
-                self.spectrogram_plot.append(ev.t, ev.db)
-        self.pitch_plot.refresh()
-        self.formant_plot.refresh()
-        if self.spectrogram_plot.isVisible():
-            self.spectrogram_plot.refresh()
+                target = self.spectrogram_wide if ev.wide else self.spectrogram_narrow
+                target.append(ev.t, ev.db)
+        if self.pitch_plot.isVisible():
+            self.pitch_plot.refresh()
+        if self.formant_plot.isVisible():
+            self.formant_plot.refresh()
+        if self.spectrogram_narrow.isVisible():
+            self.spectrogram_narrow.refresh()
+        if self.spectrogram_wide.isVisible():
+            self.spectrogram_wide.refresh()
         if self.pipeline is not None and self.pipeline.is_finished:
             error = self.pipeline.error
             self._stop()  # file ended (or source failed): reset controls
@@ -361,9 +393,11 @@ class MainWindow(QtWidgets.QMainWindow):
         if self.pipeline is not None:
             self.pipeline.pitch_ceiling = self._ceiling
         self.pitch_plot.set_y_range(75.0, self._ceiling)
+        self._save_config()
 
-    def _on_spec_toggled(self, checked: bool) -> None:
-        self.spectrogram_plot.setVisible(checked)
+    def _on_panel_toggled(self, key: str, checked: bool) -> None:
+        self._panel_widgets[key].setVisible(checked)
+        self._save_config()
 
     def _on_volume_changed(self, value: int) -> None:
         self.vol_value.setText(f"{value}%")
@@ -371,9 +405,54 @@ class MainWindow(QtWidgets.QMainWindow):
         source = self.pipeline.source if self.pipeline is not None else None
         if source is not None and hasattr(source, "volume"):
             source.volume = value / 100.0
+        self._save_config()
+
+    def _on_device_changed(self, _index: int) -> None:
+        self._save_config()
 
     def _on_source_changed(self, _index: int) -> None:
         self._sync_source_widgets()
+
+    # -- View menu + config -----------------------------------------------
+    def _build_view_menu(self) -> None:
+        menu = self.menuBar().addMenu("View")
+        self._panel_actions = {}
+        for key, label in PANELS:
+            action = QtGui.QAction(label, self, checkable=True)
+            action.toggled.connect(lambda checked, k=key: self._on_panel_toggled(k, checked))
+            menu.addAction(action)
+            self._panel_actions[key] = action
+
+    def _apply_config(self) -> None:
+        cfg = self._config
+        self.mode_combo.setCurrentIndex(1 if cfg["range_mode"] == "extended" else 0)
+        self.vol_slider.setValue(int(cfg["volume_pct"]))
+        for key, _label in PANELS:
+            visible = bool(cfg["panels"].get(key, True))
+            self._panel_actions[key].setChecked(visible)
+            self._panel_widgets[key].setVisible(visible)
+        self._restore_device(self.device_combo, cfg.get("input_device"))
+        self._restore_device(self.output_combo, cfg.get("output_device"))
+
+    @staticmethod
+    def _restore_device(combo, label) -> None:
+        if label:
+            pos = combo.findText(label)
+            if pos >= 0:
+                combo.setCurrentIndex(pos)
+
+    def _save_config(self) -> None:
+        if not self._loaded:
+            return
+        save_config(
+            {
+                "range_mode": "extended" if self._ceiling >= EXTENDED_CEILING else "normal",
+                "volume_pct": self.vol_slider.value(),
+                "panels": {k: self._panel_actions[k].isChecked() for k, _ in PANELS},
+                "input_device": self.device_combo.currentText(),
+                "output_device": self.output_combo.currentText(),
+            }
+        )
 
     def _on_browse(self) -> None:
         path, _ = QtWidgets.QFileDialog.getOpenFileName(
@@ -415,6 +494,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pause_btn.blockSignals(False)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt signature)
+        self._save_config()
         self._timer.stop()
         if self.pipeline is not None:
             self.pipeline.stop()

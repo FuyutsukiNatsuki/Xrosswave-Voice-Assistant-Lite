@@ -10,6 +10,9 @@ Run:
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import tempfile  # noqa: E402
+
+os.environ.setdefault("XVALITE_CONFIG_DIR", os.path.join(tempfile.gettempdir(), "xvalite_shot"))
 
 import _bootstrap  # noqa: E402,F401
 
@@ -30,7 +33,10 @@ def main() -> int:
     # renders instead of tofu boxes.
     app.setFont(QtGui.QFont("Segoe UI", 9))
     window = MainWindow(samplerate=DEFAULT_SAMPLERATE, initial_file=PATH)
-    window.resize(940, 820)
+    # Show all four panes for the README (wideband is off by default).
+    for key in ("pitch", "formants", "narrowband", "wideband"):
+        window._panel_actions[key].setChecked(True)
+    window.resize(960, 980)
     window.show()
     window.start()
 

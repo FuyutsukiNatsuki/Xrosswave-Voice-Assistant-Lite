@@ -34,8 +34,11 @@ import numpy as np
 from .analysis.formant import latest_formants
 from .analysis.pitch import DEFAULT_PITCH_FLOOR, latest_f0
 from .analysis.spectrogram import (
-    DEFAULT_FFT_SIZE,
     DEFAULT_MAX_FREQ,
+    NARROWBAND_FFT,
+    NARROWBAND_WINDOW,
+    WIDEBAND_FFT,
+    WIDEBAND_WINDOW,
     column_frequencies,
     spectrum_column,
 )
@@ -96,10 +99,15 @@ class VoiceQualitySample:
 
 @dataclass(frozen=True)
 class SpectrogramColumn:
-    """One narrowband spectrogram column (dB per frequency bin) at chunk rate."""
+    """One spectrogram column (dB per frequency bin) at chunk rate.
+
+    ``wide`` selects wideband (short window) vs narrowband; the db array aligns
+    with ``spectrogram_freqs_wide`` / ``spectrogram_freqs_narrow`` accordingly.
+    """
 
     t: float
-    db: np.ndarray  # aligned with AnalysisPipeline.spectrogram_freqs
+    db: np.ndarray
+    wide: bool = False
 
 
 Event = Union[PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn]
@@ -120,7 +128,6 @@ class AnalysisPipeline:
         pitch_floor: float = DEFAULT_PITCH_FLOOR,
         pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
         silence_db: float = DEFAULT_SILENCE_DB,
-        spectrogram_fft_size: int = DEFAULT_FFT_SIZE,
         spectrogram_max_freq: float = DEFAULT_MAX_FREQ,
         spectrogram_interval_sec: float = 0.0,  # 0 = every chunk
     ) -> None:
@@ -141,23 +148,28 @@ class AnalysisPipeline:
         self._vq_win = int(samplerate * vq_window_sec)
         self._vq_interval = int(samplerate * vq_interval_sec)
 
-        # Narrowband spectrogram: long FFT window, emitted at chunk rate.
-        self._spec_fft = spectrogram_fft_size
+        # Spectrograms (narrowband + wideband) emitted at chunk rate.
         self._spec_max_freq = spectrogram_max_freq
         self._spec_interval = int(samplerate * spectrogram_interval_sec)
-        # Public frequency axis so the GUI can scale the waterfall's Y axis.
-        self.spectrogram_freqs = column_frequencies(
-            samplerate, spectrogram_fft_size, spectrogram_max_freq
+        # Public frequency axes so the GUI can scale each waterfall's Y axis.
+        self.spectrogram_freqs_narrow = column_frequencies(
+            samplerate, NARROWBAND_FFT, spectrogram_max_freq
+        )
+        self.spectrogram_freqs_wide = column_frequencies(
+            samplerate, WIDEBAND_FFT, spectrogram_max_freq
         )
 
-        self._keep = max(self._pitch_win, self._formant_win, self._vq_win, self._spec_fft)
+        self._keep = max(
+            self._pitch_win, self._formant_win, self._vq_win, NARROWBAND_WINDOW
+        )
 
         self._results: "queue.Queue[Event]" = queue.Queue()
         self._lock = threading.Lock()
         self._latest_pitch: Optional[PitchSample] = None
         self._latest_formant: Optional[FormantSample] = None
         self._latest_vq: Optional[VoiceQualitySample] = None
-        self._latest_spec: Optional[SpectrogramColumn] = None
+        self._latest_spec_narrow: Optional[SpectrogramColumn] = None
+        self._latest_spec_wide: Optional[SpectrogramColumn] = None
 
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -228,9 +240,9 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_vq
 
-    def latest_spectrogram(self) -> Optional[SpectrogramColumn]:
+    def latest_spectrogram(self, wide: bool = False) -> Optional[SpectrogramColumn]:
         with self._lock:
-            return self._latest_spec
+            return self._latest_spec_wide if wide else self._latest_spec_narrow
 
     # -- worker ------------------------------------------------------------
     def _run(self) -> None:
@@ -295,12 +307,18 @@ class AnalysisPipeline:
                         vq = measure_voice_quality(window, self.samplerate)
                     self._emit(VoiceQualitySample(t, vq))
 
-                if buffer.size >= self._spec_fft and (total - last_spec) >= self._spec_interval:
+                if buffer.size >= NARROWBAND_WINDOW and (total - last_spec) >= self._spec_interval:
                     last_spec = total
-                    db = spectrum_column(
-                        buffer, self.samplerate, self._spec_fft, self._spec_max_freq
+                    nb = spectrum_column(
+                        buffer, self.samplerate, NARROWBAND_WINDOW, NARROWBAND_FFT,
+                        self._spec_max_freq,
                     )
-                    self._emit(SpectrogramColumn(t, db))
+                    self._emit(SpectrogramColumn(t, nb, wide=False))
+                    wb = spectrum_column(
+                        buffer, self.samplerate, WIDEBAND_WINDOW, WIDEBAND_FFT,
+                        self._spec_max_freq,
+                    )
+                    self._emit(SpectrogramColumn(t, wb, wide=True))
             except Exception:  # noqa: BLE001 — skip this chunk, keep streaming
                 continue
 
@@ -315,5 +333,7 @@ class AnalysisPipeline:
                 self._latest_formant = event
             elif isinstance(event, VoiceQualitySample):
                 self._latest_vq = event
+            elif event.wide:
+                self._latest_spec_wide = event
             else:
-                self._latest_spec = event
+                self._latest_spec_narrow = event

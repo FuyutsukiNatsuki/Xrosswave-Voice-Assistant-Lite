@@ -16,8 +16,8 @@ import parselmouth
 
 # Praat defaults tuned for voice. ``maximum_formant`` ~5500 Hz suits most adult
 # voices; lower (~5000) for typically male tracts if needed later.
-DEFAULT_MAX_FORMANT = 5500.0
-DEFAULT_NUM_FORMANTS = 5.0  # track 5, report the first 4
+DEFAULT_MAX_FORMANT = 6400.0  # raised so high formants of some voices are found
+DEFAULT_NUM_FORMANTS = 5.0    # track 5, report the first 4
 NUM_REPORTED = 4
 
 

@@ -108,11 +108,15 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
-  - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: narrowband dB column (Hann + rFFT, fft_size 2048 ≈ 21.5 Hz resolution).
+  - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: dB column (Hann +
+    rFFT). `window_size` sets resolution: narrowband (2048 ≈ 21.5 Hz) vs wideband (256, zero-padded
+    to 1024). Display ceiling 6400 Hz. Formant analyzer ceiling also 6400 (`analysis/formant.py`).
+  - `config.py` — `load_config`/`save_config`: JSON UI settings at `%APPDATA%/XVALite/config.json`
+    (override dir via `XVALITE_CONFIG_DIR`). Persists range mode, volume, panel visibility, devices.
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
-    background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
-    spectrogram per chunk, jitter/shimmer once/sec (needs many glottal cycles). Results
-    via `drain()` (FIFO of `PitchSample`/`FormantSample`/`VoiceQualitySample`/
+    background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband +
+    wideband spectrogram per chunk (`SpectrogramColumn.wide`), jitter/shimmer once/sec.
+    Results via `drain()` (FIFO of `PitchSample`/`FormantSample`/`VoiceQualitySample`/
     `SpectrogramColumn`) and `latest_pitch()`/
     `latest_formant()`/`latest_voice_quality()`. Start-time source failures raise out of
     `start()`; mid-stream source failures set `pipeline.error` and finish; per-chunk
@@ -129,15 +133,18 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     multiple named series, view scrolls by latest data timestamp, NaN → gaps. Hover
     crosshair shows the Hz at the cursor.
   - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
-    inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak.
+    inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak. One
+    instance each for narrowband and wideband.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
     (Microphone + input-device dropdown / Audio file + Browse… + output-device dropdown +
     volume slider) → Start builds source+pipeline; QTimer polls
     `pipeline.drain()` → pitch plot (F0) + formant plot (F1–F4, markers); Pause/Resume →
     `pipeline.pause/resume`; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔
-    Extended (2100 Hz/C7) live. Numeric readout shows F0 + F1–F4 (color-matched).
-    Voice-quality panel shows jitter/shimmer, red with ⚠ above the fixed thresholds
-    (NaN/silence → "--"). File end auto-stops the controls.
+    Extended (2100 Hz/C7) live (default Normal). View menu toggles the four panes
+    (pitch / formants / narrowband / wideband). Numeric readout shows F0 + F1–F4
+    (color-matched). Voice-quality panel shows jitter/shimmer, red with ⚠ above the fixed
+    thresholds (NaN/silence → "--"). File end auto-stops the controls. UI prefs persist via
+    `config.py`.
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
   - `run_app.py` — launch the GUI (`--file PATH` for file input, else mic).
   - `smoke_gui.py` — headless (offscreen) GUI check; the visual run needs a real machine.

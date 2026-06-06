@@ -10,6 +10,9 @@ Run:
 import os
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+import tempfile  # noqa: E402
+
+os.environ.setdefault("XVALITE_CONFIG_DIR", os.path.join(tempfile.gettempdir(), "xvalite_err"))
 
 import _bootstrap  # noqa: E402,F401
 

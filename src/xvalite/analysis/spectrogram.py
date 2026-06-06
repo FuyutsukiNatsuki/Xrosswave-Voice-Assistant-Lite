@@ -14,13 +14,20 @@ columns into a scrolling waterfall.
 
 from __future__ import annotations
 
-from typing import Tuple
+from typing import Optional, Tuple
 
 import numpy as np
 
 DEFAULT_FFT_SIZE = 2048      # ~46 ms window @ 44.1 kHz → ~21.5 Hz resolution
-DEFAULT_MAX_FREQ = 5000.0    # display ceiling (Hz)
+DEFAULT_MAX_FREQ = 6400.0    # display ceiling (Hz)
 _EPS = 1e-12
+
+# Narrowband: long window (fine frequency resolution; harmonics as stripes).
+NARROWBAND_WINDOW = 2048
+NARROWBAND_FFT = 2048
+# Wideband: short window (fine time resolution; formant bands, pitch striations).
+WIDEBAND_WINDOW = 256        # ~5.8 ms → ~172 Hz resolution
+WIDEBAND_FFT = 1024          # zero-padded for a smoother display
 
 
 def column_frequencies(
@@ -36,19 +43,26 @@ def column_frequencies(
 def spectrum_column(
     samples: np.ndarray,
     samplerate: int,
+    window_size: Optional[int] = None,
     fft_size: int = DEFAULT_FFT_SIZE,
     max_freq: float = DEFAULT_MAX_FREQ,
 ) -> np.ndarray:
-    """One narrowband spectrogram column: dB magnitude per frequency bin.
+    """One spectrogram column: dB magnitude per frequency bin.
 
-    Uses the most recent ``fft_size`` samples (left-padded with zeros if the
-    input is shorter). Returns a 1-D float32 array aligned with
-    :func:`column_frequencies`.
+    Uses the most recent ``window_size`` samples (Hann-windowed), zero-padded to
+    ``fft_size``. ``window_size`` sets the true frequency resolution (long =
+    narrowband, short = wideband); ``fft_size`` only sets the display bin
+    density. Defaults to ``window_size == fft_size`` (narrowband). Returns a 1-D
+    float32 array aligned with :func:`column_frequencies`.
     """
-    frame = samples[-fft_size:]
-    if frame.size < fft_size:
-        frame = np.pad(frame, (fft_size - frame.size, 0))
-    windowed = frame.astype(np.float64) * np.hanning(fft_size)
+    if window_size is None:
+        window_size = fft_size
+    frame = samples[-window_size:]
+    if frame.size < window_size:
+        frame = np.pad(frame, (window_size - frame.size, 0))
+    windowed = frame.astype(np.float64) * np.hanning(window_size)
+    if window_size < fft_size:  # zero-pad up to the FFT size
+        windowed = np.pad(windowed, (0, fft_size - window_size))
     spectrum = np.fft.rfft(windowed)
     power = (np.abs(spectrum) ** 2) / fft_size
     db = 10.0 * np.log10(power + _EPS)
@@ -70,6 +84,8 @@ def spectrogram(
     freqs = column_frequencies(samplerate, fft_size, max_freq)
     cols = []
     for start in range(fft_size, samples.size + 1, hop):
-        cols.append(spectrum_column(samples[:start], samplerate, fft_size, max_freq))
+        cols.append(
+            spectrum_column(samples[:start], samplerate, fft_size=fft_size, max_freq=max_freq)
+        )
     image = np.array(cols, dtype=np.float32) if cols else np.zeros((0, freqs.size), np.float32)
     return freqs, image

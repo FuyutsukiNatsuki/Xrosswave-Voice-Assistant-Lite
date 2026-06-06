@@ -10,9 +10,12 @@ Run:
 """
 
 import os
+import tempfile
 
 # Must be set before any Qt platform initialization — no window will appear.
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+# Don't touch the user's real config during the smoke test.
+os.environ.setdefault("XVALITE_CONFIG_DIR", os.path.join(tempfile.gettempdir(), "xvalite_smoke"))
 
 import _bootstrap  # noqa: E402,F401  (adds src/ to sys.path)
 
@@ -44,7 +47,7 @@ def main() -> int:
 
     pitch_n = window.pitch_plot.point_count("f0")
     formant_n = window.formant_plot.point_count("f1")
-    spec_cols = window.spectrogram_plot._count
+    spec_cols = window.spectrogram_narrow._count
     jitter_text = window.jitter_label.text()
     f0_text = window.readout["f0"].text()
     f1_text = window.readout["f1"].text()
