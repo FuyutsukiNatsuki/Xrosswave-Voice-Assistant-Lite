@@ -140,8 +140,11 @@ class MainWindow(QtWidgets.QMainWindow):
             "wideband": self.spectrogram_wide,
         }
         self._splitter = QtWidgets.QSplitter(QtCore.Qt.Vertical)
+        self._splitter.setChildrenCollapsible(False)  # panes can't shrink to 0
         for key, _label in PANELS:
-            self._splitter.addWidget(self._panel_widgets[key])
+            widget = self._panel_widgets[key]
+            widget.setMinimumHeight(120)  # always readable when shown
+            self._splitter.addWidget(widget)
         layout.addWidget(self._splitter, stretch=1)
 
         self._build_view_menu()
@@ -397,7 +400,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
     def _on_panel_toggled(self, key: str, checked: bool) -> None:
         self._panel_widgets[key].setVisible(checked)
+        self._rebalance_panels()
         self._save_config()
+
+    def _rebalance_panels(self) -> None:
+        """Give every visible pane an equal share (Qt distributes by ratio), so a
+        just-shown pane never stays collapsed at size 0."""
+        sizes = [1000 if self._panel_actions[k].isChecked() else 0 for k, _ in PANELS]
+        self._splitter.setSizes(sizes)
 
     def _on_volume_changed(self, value: int) -> None:
         self.vol_value.setText(f"{value}%")
@@ -433,6 +443,7 @@ class MainWindow(QtWidgets.QMainWindow):
             self._panel_widgets[key].setVisible(visible)
         self._restore_device(self.device_combo, cfg.get("input_device"))
         self._restore_device(self.output_combo, cfg.get("output_device"))
+        self._rebalance_panels()
 
     @staticmethod
     def _restore_device(combo, label) -> None:
