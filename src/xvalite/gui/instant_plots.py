@@ -13,6 +13,14 @@ import numpy as np
 import pyqtgraph as pg
 
 
+class _HzLogAxis(pg.AxisItem):
+    """Log-frequency axis that labels ticks as plain Hz (100, 1000, 10000),
+    not pyqtgraph's default scientific notation (10², 3·10²…)."""
+
+    def tickStrings(self, values, scale, spacing):  # noqa: ANN001 (Qt signature)
+        return [f"{10 ** v:.0f}" for v in values]
+
+
 class WaveformPlot(pg.PlotWidget):
     # Auto-gain: the Y axis tracks the signal so quiet input still fills the view.
     MIN_HALF_SPAN = 0.02   # don't zoom in past this (keeps silence from blowing up)
@@ -55,12 +63,14 @@ class SpectrumPlot(pg.PlotWidget):
         min_freq: float = 10.0,
         parent=None,
     ) -> None:
-        super().__init__(parent=parent)
+        super().__init__(parent=parent, axisItems={"bottom": _HzLogAxis(orientation="bottom")})
         self.setTitle("Spectrum (instantaneous)")
         self.setLabel("left", "level", units="dB")
         self.setLabel("bottom", "frequency", units="Hz")
         self.setLogMode(x=True, y=False)  # log frequency axis (WaveSpectra style)
         self.showGrid(x=True, y=True, alpha=0.3)
+        # Show plain Hz tick labels (100, 1000, 10000), not auto kHz.
+        self.getAxis("bottom").enableAutoSIPrefix(False)
 
         f = np.asarray(freqs, dtype=float)
         # Keep bins at/above the display floor (drops DC and the very-low region
@@ -74,10 +84,11 @@ class SpectrumPlot(pg.PlotWidget):
         self._peak_curve = self.plot(pen=pg.mkPen("#ff7777", width=1))  # dim peak-hold
         self._cur_curve = self.plot(pen=pg.mkPen("#ffdd00", width=1))   # current
         if self._freqs.size:
+            lo = float(self._freqs[0])   # first real bin → no empty left margin
             hi = float(self._freqs[-1])
-            # Fixed log range from min_freq to the top bin; don't let data auto-refit it.
-            self.setXRange(np.log10(min_freq), np.log10(hi), padding=0)
-            self.setLimits(xMin=np.log10(min_freq), xMax=np.log10(hi))
+            # Pin the log range to the data extent; don't let it auto-refit.
+            self.setXRange(np.log10(lo), np.log10(hi), padding=0)
+            self.setLimits(xMin=np.log10(lo), xMax=np.log10(hi))
             self.enableAutoRange(axis="x", enable=False)
 
     def set_peak_hold(self, on: bool) -> None:

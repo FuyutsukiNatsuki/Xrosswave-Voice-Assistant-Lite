@@ -139,8 +139,9 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     instance each for narrowband and wideband.
   - `gui/instant_plots.py` — `WaveformPlot` (oscilloscope, ~46 ms window, Y auto-gains to
     the signal so quiet input still fills the view) and `SpectrumPlot` (instantaneous FFT,
-    fixed log axis 10 Hz–10 kHz, optional peak-hold; fed by `SpectrumFrame`, which spans
-    wider than the 6400 Hz spectrogram). WaveSpectra-style "now" views; replace data each tick.
+    log axis pinned to the data extent (~20 Hz–10 kHz, plain-Hz tick labels via a custom
+    AxisItem, no empty margin), optional peak-hold; fed by `SpectrumFrame`, which spans wider
+    than the 6400 Hz spectrogram). WaveSpectra-style "now" views; replace data each tick.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
     (Microphone + input-device dropdown / Audio file + Browse… + output-device dropdown +
     volume slider) → Start builds source+pipeline; QTimer polls
