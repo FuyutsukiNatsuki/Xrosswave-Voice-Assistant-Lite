@@ -119,12 +119,28 @@ class WaveformFrame:
     samples: np.ndarray
 
 
+@dataclass(frozen=True)
+class SpectrumFrame:
+    """Instantaneous spectrum (dB per bin) for the live spectrum view.
+
+    Wider frequency extent than the spectrogram (up to ~10 kHz); the db array
+    aligns with ``AnalysisPipeline.spectrum_freqs``.
+    """
+
+    t: float
+    db: np.ndarray
+
+
 Event = Union[
-    PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn, WaveformFrame
+    PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn,
+    WaveformFrame, SpectrumFrame,
 ]
 
 # Oscilloscope window: most recent samples shown as the time-domain waveform.
 WAVEFORM_WINDOW = 2048  # ~46 ms @ 44.1 kHz
+
+# Instantaneous spectrum frequency ceiling (Hz), clamped to Nyquist per device.
+SPECTRUM_MAX_FREQ = 10000.0
 
 
 class AnalysisPipeline:
@@ -172,6 +188,11 @@ class AnalysisPipeline:
         self.spectrogram_freqs_wide = column_frequencies(
             samplerate, WIDEBAND_FFT, spectrogram_max_freq
         )
+        # Instantaneous spectrum: wider extent (up to ~10 kHz, capped at Nyquist).
+        self._spectrum_max = min(SPECTRUM_MAX_FREQ, samplerate / 2.0)
+        self.spectrum_freqs = column_frequencies(
+            samplerate, NARROWBAND_FFT, self._spectrum_max
+        )
 
         self._keep = max(
             self._pitch_win, self._formant_win, self._vq_win, NARROWBAND_WINDOW
@@ -185,6 +206,7 @@ class AnalysisPipeline:
         self._latest_spec_narrow: Optional[SpectrogramColumn] = None
         self._latest_spec_wide: Optional[SpectrogramColumn] = None
         self._latest_waveform: Optional[WaveformFrame] = None
+        self._latest_spectrum: Optional[SpectrumFrame] = None
 
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -263,6 +285,10 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_waveform
 
+    def latest_spectrum(self) -> Optional[SpectrumFrame]:
+        with self._lock:
+            return self._latest_spectrum
+
     # -- worker ------------------------------------------------------------
     def _run(self) -> None:
         buffer = np.zeros(0, dtype=np.float32)
@@ -338,6 +364,12 @@ class AnalysisPipeline:
                         self._spec_max_freq,
                     )
                     self._emit(SpectrogramColumn(t, nb, wide=False))
+                    # Instantaneous spectrum: same window, wider frequency extent.
+                    spec = spectrum_column(
+                        buffer, self.samplerate, NARROWBAND_WINDOW, NARROWBAND_FFT,
+                        self._spectrum_max,
+                    )
+                    self._emit(SpectrumFrame(t, spec))
 
                 # Wideband: several columns per chunk at a finer hop, so its time
                 # resolution is much higher than the narrowband waterfall.
@@ -368,6 +400,8 @@ class AnalysisPipeline:
                 self._latest_vq = event
             elif isinstance(event, WaveformFrame):
                 self._latest_waveform = event
+            elif isinstance(event, SpectrumFrame):
+                self._latest_spectrum = event
             elif event.wide:
                 self._latest_spec_wide = event
             else:

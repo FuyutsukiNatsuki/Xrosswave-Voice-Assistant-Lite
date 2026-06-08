@@ -48,7 +48,13 @@ class WaveformPlot(pg.PlotWidget):
 
 
 class SpectrumPlot(pg.PlotWidget):
-    def __init__(self, freqs: np.ndarray, peak_hold: bool = True, parent=None) -> None:
+    def __init__(
+        self,
+        freqs: np.ndarray,
+        peak_hold: bool = True,
+        min_freq: float = 10.0,
+        parent=None,
+    ) -> None:
         super().__init__(parent=parent)
         self.setTitle("Spectrum (instantaneous)")
         self.setLabel("left", "level", units="dB")
@@ -57,7 +63,9 @@ class SpectrumPlot(pg.PlotWidget):
         self.showGrid(x=True, y=True, alpha=0.3)
 
         f = np.asarray(freqs, dtype=float)
-        self._mask = f > 0.0  # drop the DC bin (log axis can't show 0 Hz)
+        # Keep bins at/above the display floor (drops DC and the very-low region
+        # that otherwise eats most of the log axis width).
+        self._mask = f >= min_freq
         self._freqs = f[self._mask]
         self._peak_hold = peak_hold
         self._peak: np.ndarray | None = None
@@ -66,8 +74,11 @@ class SpectrumPlot(pg.PlotWidget):
         self._peak_curve = self.plot(pen=pg.mkPen("#ff7777", width=1))  # dim peak-hold
         self._cur_curve = self.plot(pen=pg.mkPen("#ffdd00", width=1))   # current
         if self._freqs.size:
-            lo = np.log10(max(20.0, self._freqs[0]))
-            self.setXRange(lo, np.log10(self._freqs[-1]), padding=0)
+            hi = float(self._freqs[-1])
+            # Fixed log range from min_freq to the top bin; don't let data auto-refit it.
+            self.setXRange(np.log10(min_freq), np.log10(hi), padding=0)
+            self.setLimits(xMin=np.log10(min_freq), xMax=np.log10(hi))
+            self.enableAutoRange(axis="x", enable=False)
 
     def set_peak_hold(self, on: bool) -> None:
         self._peak_hold = on

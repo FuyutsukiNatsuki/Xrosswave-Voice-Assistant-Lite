@@ -34,10 +34,12 @@ from ..audio.input import (
 from ..config import load_config, save_config
 from ..pipeline import (
     DEFAULT_SILENCE_DB,
+    SPECTRUM_MAX_FREQ,
     AnalysisPipeline,
     FormantSample,
     PitchSample,
     SpectrogramColumn,
+    SpectrumFrame,
     VoiceQualitySample,
     WaveformFrame,
 )
@@ -139,9 +141,11 @@ class MainWindow(QtWidgets.QMainWindow):
             column_rate_hz=self.samplerate / WIDEBAND_HOP,  # finer time resolution
         )
         self.osc_plot = WaveformPlot(self.samplerate)
+        spectrum_max = min(SPECTRUM_MAX_FREQ, self.samplerate / 2.0)
         self.spectrum_plot = SpectrumPlot(
-            column_frequencies(self.samplerate, NARROWBAND_FFT, DEFAULT_MAX_FREQ),
+            column_frequencies(self.samplerate, NARROWBAND_FFT, spectrum_max),
             peak_hold=bool(self._config.get("peak_hold", True)),
+            min_freq=10.0,
         )
 
         self._panel_widgets = {
@@ -351,13 +355,14 @@ class MainWindow(QtWidgets.QMainWindow):
             elif isinstance(ev, WaveformFrame):
                 if self.osc_plot.isVisible():
                     self.osc_plot.set_frame(ev.samples)
+            elif isinstance(ev, SpectrumFrame):
+                if self.spectrum_plot.isVisible():
+                    self.spectrum_plot.set_column(ev.db)
             elif isinstance(ev, SpectrogramColumn):
                 if ev.wide:
                     self.spectrogram_wide.append(ev.t, ev.db)
                 else:
                     self.spectrogram_narrow.append(ev.t, ev.db)
-                    if self.spectrum_plot.isVisible():
-                        self.spectrum_plot.set_column(ev.db)  # instantaneous spectrum
         if self.pitch_plot.isVisible():
             self.pitch_plot.refresh()
         if self.formant_plot.isVisible():
