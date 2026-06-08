@@ -14,25 +14,37 @@ import pyqtgraph as pg
 
 
 class WaveformPlot(pg.PlotWidget):
-    def __init__(self, samplerate: int, window_size: int = 1024, parent=None) -> None:
+    # Auto-gain: the Y axis tracks the signal so quiet input still fills the view.
+    MIN_HALF_SPAN = 0.02   # don't zoom in past this (keeps silence from blowing up)
+    DECAY = 0.92           # how fast the range shrinks when the signal gets quieter
+
+    def __init__(self, samplerate: int, window_size: int = 2048, parent=None) -> None:
         super().__init__(parent=parent)
         self.samplerate = samplerate
         self.setTitle("Waveform (oscilloscope)")
         self.setLabel("left", "amplitude")
         self.setLabel("bottom", "time", units="ms")
-        self.setYRange(-1.0, 1.0)
         self.showGrid(x=True, y=True, alpha=0.3)
         self._curve = self.plot(pen=pg.mkPen("#7fdfff", width=1))
         self._x = np.arange(window_size) / samplerate * 1000.0
+        self._half_span = self.MIN_HALF_SPAN
+        self.setYRange(-self._half_span, self._half_span)
         self.setXRange(0.0, float(self._x[-1]) if self._x.size else 1.0, padding=0)
 
     def set_frame(self, samples: np.ndarray) -> None:
         n = samples.size
         x = self._x[:n] if n <= self._x.size else np.arange(n) / self.samplerate * 1000.0
         self._curve.setData(x, samples)
+        # Fast attack, slow decay so the trace fills ~80% of the pane.
+        peak = float(np.max(np.abs(samples))) if n else 0.0
+        target = max(peak * 1.25, self.MIN_HALF_SPAN)
+        self._half_span = max(target, self._half_span * self.DECAY)
+        self.setYRange(-self._half_span, self._half_span)
 
     def clear_data(self) -> None:
         self._curve.setData([], [])
+        self._half_span = self.MIN_HALF_SPAN
+        self.setYRange(-self._half_span, self._half_span)
 
 
 class SpectrumPlot(pg.PlotWidget):

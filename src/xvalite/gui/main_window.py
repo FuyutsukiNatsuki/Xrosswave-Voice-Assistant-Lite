@@ -20,6 +20,7 @@ from ..analysis.spectrogram import (
     DEFAULT_MAX_FREQ,
     NARROWBAND_FFT,
     WIDEBAND_FFT,
+    WIDEBAND_HOP,
     column_frequencies,
 )
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
@@ -135,6 +136,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spectrogram_wide = SpectrogramPlot(
             column_frequencies(self.samplerate, WIDEBAND_FFT, DEFAULT_MAX_FREQ),
             window_sec=10.0, title="Spectrogram (wideband)",
+            column_rate_hz=self.samplerate / WIDEBAND_HOP,  # finer time resolution
         )
         self.osc_plot = WaveformPlot(self.samplerate)
         self.spectrum_plot = SpectrumPlot(

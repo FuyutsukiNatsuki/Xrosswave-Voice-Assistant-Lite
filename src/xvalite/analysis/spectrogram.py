@@ -28,6 +28,7 @@ NARROWBAND_FFT = 2048
 # Wideband: short window (fine time resolution; formant bands, pitch striations).
 WIDEBAND_WINDOW = 256        # ~5.8 ms → ~172 Hz resolution
 WIDEBAND_FFT = 1024          # zero-padded for a smoother display
+WIDEBAND_HOP = 256           # columns every ~5.8 ms (≈8× the narrowband column rate)
 
 
 def column_frequencies(

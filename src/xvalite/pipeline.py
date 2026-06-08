@@ -38,6 +38,7 @@ from .analysis.spectrogram import (
     NARROWBAND_FFT,
     NARROWBAND_WINDOW,
     WIDEBAND_FFT,
+    WIDEBAND_HOP,
     WIDEBAND_WINDOW,
     column_frequencies,
     spectrum_column,
@@ -123,7 +124,7 @@ Event = Union[
 ]
 
 # Oscilloscope window: most recent samples shown as the time-domain waveform.
-WAVEFORM_WINDOW = 1024  # ~23 ms @ 44.1 kHz
+WAVEFORM_WINDOW = 2048  # ~46 ms @ 44.1 kHz
 
 
 class AnalysisPipeline:
@@ -268,7 +269,8 @@ class AnalysisPipeline:
         total = 0           # cumulative analyzed samples (the analysis clock)
         last_formant = 0    # sample count at last formant analysis
         last_vq = 0         # sample count at last voice-quality analysis
-        last_spec = 0       # sample count at last spectrogram column
+        last_spec = 0       # sample count at last narrowband column
+        last_wide = 0       # sample count at last wideband column (finer hop)
         while not self._stop.is_set():
             try:
                 chunk = self.source.read(timeout=0.2)
@@ -328,6 +330,7 @@ class AnalysisPipeline:
                         vq = measure_voice_quality(window, self.samplerate)
                     self._emit(VoiceQualitySample(t, vq))
 
+                # Narrowband: one column per chunk (frequency-focused).
                 if buffer.size >= NARROWBAND_WINDOW and (total - last_spec) >= self._spec_interval:
                     last_spec = total
                     nb = spectrum_column(
@@ -335,11 +338,20 @@ class AnalysisPipeline:
                         self._spec_max_freq,
                     )
                     self._emit(SpectrogramColumn(t, nb, wide=False))
+
+                # Wideband: several columns per chunk at a finer hop, so its time
+                # resolution is much higher than the narrowband waterfall.
+                while buffer.size >= WIDEBAND_WINDOW and (total - last_wide) >= WIDEBAND_HOP:
+                    last_wide += WIDEBAND_HOP
+                    end = last_wide - total + buffer.size  # buffer index of window end
+                    if end < WIDEBAND_WINDOW or end > buffer.size:
+                        continue
+                    window = buffer[end - WIDEBAND_WINDOW : end]
                     wb = spectrum_column(
-                        buffer, self.samplerate, WIDEBAND_WINDOW, WIDEBAND_FFT,
+                        window, self.samplerate, WIDEBAND_WINDOW, WIDEBAND_FFT,
                         self._spec_max_freq,
                     )
-                    self._emit(SpectrogramColumn(t, wb, wide=True))
+                    self._emit(SpectrogramColumn(last_wide / self.samplerate, wb, wide=True))
             except Exception:  # noqa: BLE001 — skip this chunk, keep streaming
                 continue
 

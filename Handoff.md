@@ -111,6 +111,7 @@
 | 2026-06-03 | Claude Code (Opus 4.8) | フォルマント/SG表示を6400Hzへ拡張（Burg ceilingも6400）。広帯域SG追加（窓256）＋Viewメニューで4ペイン表示切替。ピッチ既定をNormalに。設定永続化(`config.py`, JSON, `XVALITE_CONFIG_DIR`で上書き可)。全検証合格・config往復確認 |
 | 2026-06-03 | Claude Code (Opus 4.8) | Splitterのパネル潰れ修正（collapsible無効＋最小高さ＋表示時に均等再配分） |
 | 2026-06-03 | Claude Code (Opus 4.8) | WaveSpectra相当の2ビュー追加: オシロスコープ(`WaveformFrame`)＋瞬時スペクトラム(対数軸・ピークホールド、`gui/instant_plots`)。Viewメニューは計6ペインに。peak_holdも設定永続化。スクショ更新・全検証合格 |
+| 2026-06-03 | Claude Code (Opus 4.8) | オシロ改善: 表示窓46msへ拡大＋縦軸を信号追従の自動ゲイン化（静かな入力でも見やすく）。広帯域SGをサブチャンクホップ(256≒5.8ms)で生成し時間分解能を狭帯域の約8倍に。verify_pipelineを各ストリーム単調性＋広帯域列数チェックに更新 |
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。

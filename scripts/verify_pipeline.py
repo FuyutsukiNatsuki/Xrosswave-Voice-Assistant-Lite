@@ -27,6 +27,7 @@ from xvalite.pipeline import (
     AnalysisPipeline,
     FormantSample,
     PitchSample,
+    SpectrogramColumn,
     VoiceQualitySample,
 )
 
@@ -69,13 +70,21 @@ def part_throughput(path: str) -> bool:
         lastf = formant[-1]
         print(f"last formant @ t={lastf.t:.1f}s  F1-F4={np.round(lastf.formants).tolist()}")
 
+    def monotonic(seq):
+        return all(seq[i].t <= seq[i + 1].t for i in range(len(seq) - 1))
+
+    wide = [e for e in events if isinstance(e, SpectrogramColumn) and e.wide]
+
     checks = {
         "got pitch samples": len(pitch) > 10,
         "formant cadence ~= pitch (per chunk)": len(formant) >= len(pitch) * 0.8,
         "vq count ~ duration": abs(len(vq) - expected_vq) <= 1,
+        "wideband finer than narrowband (more columns)": len(wide) > len(pitch) * 3,
         "F0 in plausible voice range": bool(voiced) and 50 <= np.median(voiced) <= 500,
-        "timestamps monotonic": all(
-            events[i].t <= events[i + 1].t for i in range(len(events) - 1)
+        # Each stream has its own timeline; check monotonicity per stream (the
+        # finer wideband hop makes the interleaved global order non-monotonic).
+        "per-stream timestamps monotonic": all(
+            monotonic(s) for s in (pitch, formant, vq, wide)
         ),
     }
     ok = True

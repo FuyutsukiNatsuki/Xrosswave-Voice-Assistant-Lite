@@ -114,8 +114,9 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `config.py` — `load_config`/`save_config`: JSON UI settings at `%APPDATA%/XVALite/config.json`
     (override dir via `XVALITE_CONFIG_DIR`). Persists range mode, volume, panel visibility, devices.
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
-    background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband +
-    wideband spectrogram per chunk (`SpectrogramColumn.wide`), jitter/shimmer once/sec.
+    background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
+    spectrogram per chunk, wideband spectrogram per `WIDEBAND_HOP` (~5.8 ms, ≈8× finer
+    time res; `SpectrogramColumn.wide`), jitter/shimmer once/sec.
     Plus an oscilloscope `WaveformFrame` per chunk. Results via `drain()` (FIFO of
     `PitchSample`/`FormantSample`/`VoiceQualitySample`/`SpectrogramColumn`/`WaveformFrame`)
     and `latest_pitch()`/
@@ -136,9 +137,9 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
     inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak. One
     instance each for narrowband and wideband.
-  - `gui/instant_plots.py` — `WaveformPlot` (oscilloscope, amplitude vs time) and
-    `SpectrumPlot` (instantaneous FFT, log freq axis, optional peak-hold). WaveSpectra-style
-    "now" views; replace their data each tick rather than scrolling.
+  - `gui/instant_plots.py` — `WaveformPlot` (oscilloscope, ~46 ms window, Y auto-gains to
+    the signal so quiet input still fills the view) and `SpectrumPlot` (instantaneous FFT,
+    log freq axis, optional peak-hold). WaveSpectra-style "now" views; replace data each tick.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
     (Microphone + input-device dropdown / Audio file + Browse… + output-device dropdown +
     volume slider) → Start builds source+pipeline; QTimer polls
