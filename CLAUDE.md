@@ -116,8 +116,9 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
     background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband +
     wideband spectrogram per chunk (`SpectrogramColumn.wide`), jitter/shimmer once/sec.
-    Results via `drain()` (FIFO of `PitchSample`/`FormantSample`/`VoiceQualitySample`/
-    `SpectrogramColumn`) and `latest_pitch()`/
+    Plus an oscilloscope `WaveformFrame` per chunk. Results via `drain()` (FIFO of
+    `PitchSample`/`FormantSample`/`VoiceQualitySample`/`SpectrogramColumn`/`WaveformFrame`)
+    and `latest_pitch()`/
     `latest_formant()`/`latest_voice_quality()`. Start-time source failures raise out of
     `start()`; mid-stream source failures set `pipeline.error` and finish; per-chunk
     analysis errors skip that chunk.
@@ -135,13 +136,17 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `gui/spectrogram_plot.py` — `SpectrogramPlot`: scrolling waterfall (ImageItem +
     inferno colormap); 2-D dB buffer scrolls left, levels auto-track the peak. One
     instance each for narrowband and wideband.
+  - `gui/instant_plots.py` — `WaveformPlot` (oscilloscope, amplitude vs time) and
+    `SpectrumPlot` (instantaneous FFT, log freq axis, optional peak-hold). WaveSpectra-style
+    "now" views; replace their data each tick rather than scrolling.
   - `gui/main_window.py` — `MainWindow`: owns the pipeline lifecycle. Source row
     (Microphone + input-device dropdown / Audio file + Browse… + output-device dropdown +
     volume slider) → Start builds source+pipeline; QTimer polls
     `pipeline.drain()` → pitch plot (F0) + formant plot (F1–F4, markers); Pause/Resume →
     `pipeline.pause/resume`; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔
-    Extended (2100 Hz/C7) live (default Normal). View menu toggles the four panes
-    (pitch / formants / narrowband / wideband). Numeric readout shows F0 + F1–F4
+    Extended (2100 Hz/C7) live (default Normal). View menu toggles six panes
+    (pitch / formants / oscilloscope / spectrum / narrowband / wideband); Peak-hold
+    checkbox for the spectrum view. Numeric readout shows F0 + F1–F4
     (color-matched). Voice-quality panel shows jitter/shimmer, red with ⚠ above the fixed
     thresholds (NaN/silence → "--"). File end auto-stops the controls. UI prefs persist via
     `config.py`.

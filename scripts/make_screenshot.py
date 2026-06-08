@@ -33,10 +33,12 @@ def main() -> int:
     # renders instead of tofu boxes.
     app.setFont(QtGui.QFont("Segoe UI", 9))
     window = MainWindow(samplerate=DEFAULT_SAMPLERATE, initial_file=PATH)
-    # Show all four panes for the README (wideband is off by default).
-    for key in ("pitch", "formants", "narrowband", "wideband"):
-        window._panel_actions[key].setChecked(True)
-    window.resize(960, 980)
+    # Curated panes for the README: F0 + the two WaveSpectra-style views +
+    # a spectrogram (showcases breadth without all six panes).
+    shown = {"pitch", "oscilloscope", "spectrum", "narrowband"}
+    for key, action in window._panel_actions.items():
+        action.setChecked(key in shown)
+    window.resize(960, 1020)
     window.show()
     window.start()
 

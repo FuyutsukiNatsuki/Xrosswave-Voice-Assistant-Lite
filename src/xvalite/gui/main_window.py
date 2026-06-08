@@ -38,7 +38,9 @@ from ..pipeline import (
     PitchSample,
     SpectrogramColumn,
     VoiceQualitySample,
+    WaveformFrame,
 )
+from .instant_plots import SpectrumPlot, WaveformPlot
 from .scrolling_plot import ScrollingPlot
 from .spectrogram_plot import SpectrogramPlot
 
@@ -56,10 +58,12 @@ EXTENDED_CEILING = 2100.0   # ~C7
 FORMANT_SERIES = [("f1", "F1", "r"), ("f2", "F2", "g"), ("f3", "F3", "c"), ("f4", "F4", "m")]
 FORMANT_Y_MAX = 6400.0
 
-# Selectable plot panes (config key, menu label).
+# Selectable plot panes (config key, menu label). Order = top→bottom in the splitter.
 PANELS = [
     ("pitch", "Pitch (F0)"),
     ("formants", "Formants (F1–F4)"),
+    ("oscilloscope", "Waveform (oscilloscope)"),
+    ("spectrum", "Spectrum (instantaneous)"),
     ("narrowband", "Spectrogram — narrowband"),
     ("wideband", "Spectrogram — wideband"),
 ]
@@ -132,10 +136,17 @@ class MainWindow(QtWidgets.QMainWindow):
             column_frequencies(self.samplerate, WIDEBAND_FFT, DEFAULT_MAX_FREQ),
             window_sec=10.0, title="Spectrogram (wideband)",
         )
+        self.osc_plot = WaveformPlot(self.samplerate)
+        self.spectrum_plot = SpectrumPlot(
+            column_frequencies(self.samplerate, NARROWBAND_FFT, DEFAULT_MAX_FREQ),
+            peak_hold=bool(self._config.get("peak_hold", True)),
+        )
 
         self._panel_widgets = {
             "pitch": self.pitch_plot,
             "formants": self.formant_plot,
+            "oscilloscope": self.osc_plot,
+            "spectrum": self.spectrum_plot,
             "narrowband": self.spectrogram_narrow,
             "wideband": self.spectrogram_wide,
         }
@@ -226,10 +237,15 @@ class MainWindow(QtWidgets.QMainWindow):
         self.mode_combo.setCurrentIndex(1 if self._ceiling >= EXTENDED_CEILING else 0)
         self.mode_combo.currentIndexChanged.connect(self._on_mode_changed)
 
+        self.peak_check = QtWidgets.QCheckBox("Peak hold")
+        self.peak_check.setToolTip("Hold the per-frequency maximum on the spectrum view")
+        self.peak_check.toggled.connect(self._on_peak_hold_toggled)
+
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
         row.addWidget(QtWidgets.QLabel("Range:"))
         row.addWidget(self.mode_combo)
+        row.addWidget(self.peak_check)
         row.addStretch(1)
 
         # Numeric readout: F0 + F1–F4, color-matched to the plots.
@@ -302,6 +318,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.formant_plot.clear_data()
         self.spectrogram_narrow.clear_data()
         self.spectrogram_wide.clear_data()
+        self.osc_plot.clear_data()
+        self.spectrum_plot.clear_data()
         self._reset_vq_labels()
         self._reset_readout()
         self._timer.start()
@@ -328,9 +346,16 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._set_readout(key, ev.formants[i])
             elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
+            elif isinstance(ev, WaveformFrame):
+                if self.osc_plot.isVisible():
+                    self.osc_plot.set_frame(ev.samples)
             elif isinstance(ev, SpectrogramColumn):
-                target = self.spectrogram_wide if ev.wide else self.spectrogram_narrow
-                target.append(ev.t, ev.db)
+                if ev.wide:
+                    self.spectrogram_wide.append(ev.t, ev.db)
+                else:
+                    self.spectrogram_narrow.append(ev.t, ev.db)
+                    if self.spectrum_plot.isVisible():
+                        self.spectrum_plot.set_column(ev.db)  # instantaneous spectrum
         if self.pitch_plot.isVisible():
             self.pitch_plot.refresh()
         if self.formant_plot.isVisible():
@@ -420,6 +445,10 @@ class MainWindow(QtWidgets.QMainWindow):
     def _on_device_changed(self, _index: int) -> None:
         self._save_config()
 
+    def _on_peak_hold_toggled(self, checked: bool) -> None:
+        self.spectrum_plot.set_peak_hold(checked)
+        self._save_config()
+
     def _on_source_changed(self, _index: int) -> None:
         self._sync_source_widgets()
 
@@ -437,6 +466,7 @@ class MainWindow(QtWidgets.QMainWindow):
         cfg = self._config
         self.mode_combo.setCurrentIndex(1 if cfg["range_mode"] == "extended" else 0)
         self.vol_slider.setValue(int(cfg["volume_pct"]))
+        self.peak_check.setChecked(bool(cfg.get("peak_hold", True)))
         for key, _label in PANELS:
             visible = bool(cfg["panels"].get(key, True))
             self._panel_actions[key].setChecked(visible)
@@ -460,6 +490,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "range_mode": "extended" if self._ceiling >= EXTENDED_CEILING else "normal",
                 "volume_pct": self.vol_slider.value(),
                 "panels": {k: self._panel_actions[k].isChecked() for k, _ in PANELS},
+                "peak_hold": self.peak_check.isChecked(),
                 "input_device": self.device_combo.currentText(),
                 "output_device": self.output_combo.currentText(),
             }

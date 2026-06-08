@@ -109,6 +109,8 @@
 | 2026-06-03 | Claude Code (Opus 4.8) | ビルドスクリプトをcwd非依存に修正（PSScriptRoot基準、失敗時throw）。マイク入力デバイス選択ドロップダウン追加（`list_input_devices`、既定=システム既定、マイク選択時のみ表示） |
 | 2026-06-03 | Claude Code (Opus 4.8) | ファイル再生機能追加: `FileInput`が出力デバイスへ再生（出力デバイス選択＋音量スライダー既定10%、ライブ調整）。pauseで再生も停止（pipeline→source.pause転送）。出力失敗時は無音フォールバック。スクショ更新 |
 | 2026-06-03 | Claude Code (Opus 4.8) | フォルマント/SG表示を6400Hzへ拡張（Burg ceilingも6400）。広帯域SG追加（窓256）＋Viewメニューで4ペイン表示切替。ピッチ既定をNormalに。設定永続化(`config.py`, JSON, `XVALITE_CONFIG_DIR`で上書き可)。全検証合格・config往復確認 |
+| 2026-06-03 | Claude Code (Opus 4.8) | Splitterのパネル潰れ修正（collapsible無効＋最小高さ＋表示時に均等再配分） |
+| 2026-06-03 | Claude Code (Opus 4.8) | WaveSpectra相当の2ビュー追加: オシロスコープ(`WaveformFrame`)＋瞬時スペクトラム(対数軸・ピークホールド、`gui/instant_plots`)。Viewメニューは計6ペインに。peak_holdも設定永続化。スクショ更新・全検証合格 |
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。

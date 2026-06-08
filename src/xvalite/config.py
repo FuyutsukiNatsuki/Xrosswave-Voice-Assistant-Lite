@@ -24,9 +24,12 @@ DEFAULTS: Dict[str, Any] = {
     "panels": {                      # which plot panes are visible
         "pitch": True,
         "formants": True,
+        "oscilloscope": False,
+        "spectrum": False,
         "narrowband": True,
         "wideband": False,
     },
+    "peak_hold": True,               # spectrum view peak-hold trace
     "input_device": None,            # combo label of the chosen device, or None
     "output_device": None,
 }

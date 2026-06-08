@@ -110,7 +110,20 @@ class SpectrogramColumn:
     wide: bool = False
 
 
-Event = Union[PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn]
+@dataclass(frozen=True)
+class WaveformFrame:
+    """Recent time-domain samples for an oscilloscope view (chunk rate)."""
+
+    t: float
+    samples: np.ndarray
+
+
+Event = Union[
+    PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn, WaveformFrame
+]
+
+# Oscilloscope window: most recent samples shown as the time-domain waveform.
+WAVEFORM_WINDOW = 1024  # ~23 ms @ 44.1 kHz
 
 
 class AnalysisPipeline:
@@ -170,6 +183,7 @@ class AnalysisPipeline:
         self._latest_vq: Optional[VoiceQualitySample] = None
         self._latest_spec_narrow: Optional[SpectrogramColumn] = None
         self._latest_spec_wide: Optional[SpectrogramColumn] = None
+        self._latest_waveform: Optional[WaveformFrame] = None
 
         self._thread: Optional[threading.Thread] = None
         self._stop = threading.Event()
@@ -244,6 +258,10 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_spec_wide if wide else self._latest_spec_narrow
 
+    def latest_waveform(self) -> Optional[WaveformFrame]:
+        with self._lock:
+            return self._latest_waveform
+
     # -- worker ------------------------------------------------------------
     def _run(self) -> None:
         buffer = np.zeros(0, dtype=np.float32)
@@ -272,6 +290,9 @@ class AnalysisPipeline:
             total += chunk.size
             buffer = np.concatenate([buffer, chunk])[-self._keep :]
             t = total / self.samplerate
+
+            # Oscilloscope frame (cheap; emitted every chunk).
+            self._emit(WaveformFrame(t, buffer[-WAVEFORM_WINDOW:].copy()))
 
             # Analysis errors on a bad window should skip that chunk, not kill
             # the worker. Parselmouth's formant/VQ calls already guard internally.
@@ -333,6 +354,8 @@ class AnalysisPipeline:
                 self._latest_formant = event
             elif isinstance(event, VoiceQualitySample):
                 self._latest_vq = event
+            elif isinstance(event, WaveformFrame):
+                self._latest_waveform = event
             elif event.wide:
                 self._latest_spec_wide = event
             else:
