@@ -38,7 +38,7 @@ def main() -> int:
     shown = {"pitch", "oscilloscope", "spectrum", "narrowband"}
     for key, action in window._panel_actions.items():
         action.setChecked(key in shown)
-    window.resize(960, 1020)
+    window.resize(1140, 1020)
     window.show()
     window.start()
 

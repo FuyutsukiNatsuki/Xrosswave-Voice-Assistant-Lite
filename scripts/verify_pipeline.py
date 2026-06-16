@@ -110,8 +110,8 @@ def part_pause(path: str) -> bool:
 
     running = count_over(1.0)
     pipe.pause()
-    pipe.drain()  # clear anything already queued
-    time.sleep(0.1)
+    time.sleep(0.2)   # let any chunk already in flight finish
+    pipe.drain()      # discard that residual, then measure a truly paused window
     paused = count_over(1.0)
     pipe.resume()
     resumed = count_over(1.0)

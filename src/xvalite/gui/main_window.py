@@ -40,6 +40,7 @@ from ..pipeline import (
     PitchSample,
     SpectrogramColumn,
     SpectrumFrame,
+    VoiceProfileSample,
     VoiceQualitySample,
     WaveformFrame,
 )
@@ -113,9 +114,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
         layout.addLayout(self._build_source_row())
         layout.addLayout(self._build_controls_row())
-        layout.addLayout(self._build_vq_row())
 
-        # -- four selectable plot panes in a resizable vertical splitter --
+        # -- six selectable plot panes in a resizable vertical splitter --
         self.pitch_plot = ScrollingPlot(
             title="Pitch (F0)", y_label="Hz",
             y_range=(75.0, self._ceiling), window_sec=10.0,
@@ -162,7 +162,12 @@ class MainWindow(QtWidgets.QMainWindow):
             widget = self._panel_widgets[key]
             widget.setMinimumHeight(120)  # always readable when shown
             self._splitter.addWidget(widget)
-        layout.addWidget(self._splitter, stretch=1)
+
+        # Left: vertical list of numeric readouts. Right: the plots.
+        body = QtWidgets.QHBoxLayout()
+        body.addWidget(self._build_left_panel())
+        body.addWidget(self._splitter, stretch=1)
+        layout.addLayout(body, stretch=1)
 
         self._build_view_menu()
 
@@ -253,29 +258,55 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addWidget(self.mode_combo)
         row.addWidget(self.peak_check)
         row.addStretch(1)
+        return row
 
-        # Numeric readout: F0 + F1–F4, color-matched to the plots.
+    def _build_left_panel(self) -> QtWidgets.QWidget:
+        """Vertical list of numeric readouts down the left side of the window."""
+        panel = QtWidgets.QWidget()
+        panel.setFixedWidth(200)
+        col = QtWidgets.QVBoxLayout(panel)
+        col.setContentsMargins(6, 4, 6, 4)
+        col.setSpacing(3)
+
+        def header(text: str) -> None:
+            lbl = QtWidgets.QLabel(text)
+            lbl.setStyleSheet("color: #9ad; font-weight: bold; margin-top: 6px;")
+            col.addWidget(lbl)
+
+        # Pitch / formants.
+        header("ピッチ・フォルマント")
         self.readout = {}
         for key, color in READOUT_SERIES:
             lbl = QtWidgets.QLabel(f"{key.upper()}: --")
-            lbl.setStyleSheet(f"color: {color}; font-weight: bold; padding: 0 4px;")
+            lbl.setStyleSheet(f"color: {color}; font-weight: bold;")
             self.readout[key] = lbl
-            row.addWidget(lbl)
-        return row
+            col.addWidget(lbl)
 
-    def _build_vq_row(self) -> QtWidgets.QHBoxLayout:
-        row = QtWidgets.QHBoxLayout()
+        # Voice quality.
+        header("声質")
         self.jitter_label = QtWidgets.QLabel("Jitter: --")
         self.shimmer_label = QtWidgets.QLabel("Shimmer: --")
         self.jitter_label.setToolTip(f"warns above {JITTER_LOCAL_WARN:.0%}")
         self.shimmer_label.setToolTip(f"warns above {SHIMMER_LOCAL_WARN:.0%}")
         self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
         self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
-        row.addWidget(QtWidgets.QLabel("Voice quality:"))
-        row.addWidget(self.jitter_label)
-        row.addWidget(self.shimmer_label)
-        row.addStretch(1)
-        return row
+        col.addWidget(self.jitter_label)
+        col.addWidget(self.shimmer_label)
+
+        # Estimation (register + voice tendency).
+        header("推定")
+        self.register_label = QtWidgets.QLabel("声区: --")
+        self.tendency_label = QtWidgets.QLabel("声の傾向: --")
+        self.hnr_label = QtWidgets.QLabel("HNR: --")
+        self.register_label.setToolTip("地声寄り / ミックス / 裏声寄り（推定）")
+        self.tendency_label.setToolTip("低声寄り / 中間 / 高声寄り（声の音響的傾向）")
+        for lbl in (self.register_label, self.tendency_label, self.hnr_label):
+            lbl.setStyleSheet("color: #ddd;")
+            lbl.setWordWrap(True)
+            col.addWidget(lbl)
+
+        col.addStretch(1)
+        return panel
 
     # -- public ------------------------------------------------------------
     def start(self) -> None:
@@ -352,6 +383,8 @@ class MainWindow(QtWidgets.QMainWindow):
                     self._set_readout(key, ev.formants[i])
             elif isinstance(ev, VoiceQualitySample):
                 self._update_voice_quality(ev.voice_quality)
+            elif isinstance(ev, VoiceProfileSample):
+                self._update_voice_profile(ev.profile)
             elif isinstance(ev, WaveformFrame):
                 if self.osc_plot.isVisible():
                     self.osc_plot.set_frame(ev.samples)
@@ -397,6 +430,20 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shimmer_label.setText("Shimmer: --")
         self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
         self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
+        self.register_label.setText("声区: --")
+        self.tendency_label.setText("声の傾向: --")
+        self.hnr_label.setText("HNR: --")
+
+    def _update_voice_profile(self, p) -> None:
+        if p.register == "Unknown":
+            self.register_label.setText("声区: --")
+            self.tendency_label.setText("声の傾向: --")
+            self.hnr_label.setText("HNR: --")
+            return
+        self.register_label.setText(f"声区: {p.register_ja}（{p.register_conf}）")
+        self.tendency_label.setText(f"声の傾向: {p.tendency_ja}（{p.tendency_conf}）")
+        hnr = f"{p.hnr:.1f} dB" if np.isfinite(p.hnr) else "--"
+        self.hnr_label.setText(f"HNR: {hnr}")
 
     @staticmethod
     def _set_vq_label(label, name: str, value: float, warning: bool) -> None:

@@ -43,6 +43,7 @@ from .analysis.spectrogram import (
     column_frequencies,
     spectrum_column,
 )
+from .analysis.voice_profile import VoiceProfile, measure_voice_profile
 from .analysis.voice_quality import VoiceQuality, measure_voice_quality
 from .audio.input import DEFAULT_SAMPLERATE
 
@@ -120,6 +121,14 @@ class WaveformFrame:
 
 
 @dataclass(frozen=True)
+class VoiceProfileSample:
+    """Estimated register + voice tendency at the (slow) ~1 Hz cadence."""
+
+    t: float
+    profile: VoiceProfile
+
+
+@dataclass(frozen=True)
 class SpectrumFrame:
     """Instantaneous spectrum (dB per bin) for the live spectrum view.
 
@@ -132,8 +141,8 @@ class SpectrumFrame:
 
 
 Event = Union[
-    PitchSample, FormantSample, VoiceQualitySample, SpectrogramColumn,
-    WaveformFrame, SpectrumFrame,
+    PitchSample, FormantSample, VoiceQualitySample, VoiceProfileSample,
+    SpectrogramColumn, WaveformFrame, SpectrumFrame,
 ]
 
 # Oscilloscope window: most recent samples shown as the time-domain waveform.
@@ -203,6 +212,7 @@ class AnalysisPipeline:
         self._latest_pitch: Optional[PitchSample] = None
         self._latest_formant: Optional[FormantSample] = None
         self._latest_vq: Optional[VoiceQualitySample] = None
+        self._latest_profile: Optional[VoiceProfileSample] = None
         self._latest_spec_narrow: Optional[SpectrogramColumn] = None
         self._latest_spec_wide: Optional[SpectrogramColumn] = None
         self._latest_waveform: Optional[WaveformFrame] = None
@@ -276,6 +286,10 @@ class AnalysisPipeline:
     def latest_voice_quality(self) -> Optional[VoiceQualitySample]:
         with self._lock:
             return self._latest_vq
+
+    def latest_voice_profile(self) -> Optional[VoiceProfileSample]:
+        with self._lock:
+            return self._latest_profile
 
     def latest_spectrogram(self, wide: bool = False) -> Optional[SpectrogramColumn]:
         with self._lock:
@@ -352,9 +366,15 @@ class AnalysisPipeline:
                     window = buffer[-self._vq_win :]
                     if _dbfs(window) < self.silence_db:
                         vq = VoiceQuality(float("nan"), float("nan"))
+                        profile = VoiceProfile(
+                            "Unknown", "--", "unknown", "--",
+                            float("nan"), float("nan"), float("nan"), float("nan"),
+                        )
                     else:
                         vq = measure_voice_quality(window, self.samplerate)
+                        profile = measure_voice_profile(window, self.samplerate)
                     self._emit(VoiceQualitySample(t, vq))
+                    self._emit(VoiceProfileSample(t, profile))
 
                 # Narrowband: one column per chunk (frequency-focused).
                 if buffer.size >= NARROWBAND_WINDOW and (total - last_spec) >= self._spec_interval:
@@ -398,6 +418,8 @@ class AnalysisPipeline:
                 self._latest_formant = event
             elif isinstance(event, VoiceQualitySample):
                 self._latest_vq = event
+            elif isinstance(event, VoiceProfileSample):
+                self._latest_profile = event
             elif isinstance(event, WaveformFrame):
                 self._latest_waveform = event
             elif isinstance(event, SpectrumFrame):

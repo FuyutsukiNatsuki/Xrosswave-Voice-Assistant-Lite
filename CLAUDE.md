@@ -48,6 +48,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 # Verify narrowband spectrogram (deterministic, no mic needed)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_spectrogram_synthetic.py
 
+# Verify register / voice-tendency estimation (deterministic, no mic needed)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_profile_synthetic.py
+
 # Live mic jitter/shimmer readout
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_quality_mic.py
 
@@ -108,6 +111,10 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
+  - `analysis/voice_profile.py` — `measure_voice_profile` → `VoiceProfile`: estimates vocal
+    register (Chest/Mix/Head) and voice tendency (low/mid/high) from F0 + F1 + HNR (Parselmouth
+    harmonicity) + spectral centroid. Heuristic + confidence; no librosa/pyworld. Reported as
+    estimates, not verdicts (tunable thresholds; meaningful only on sustained phonation).
   - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: dB column (Hann +
     rFFT). `window_size` sets resolution: narrowband (2048 ≈ 21.5 Hz) vs wideband (256, zero-padded
     to 1024). Display ceiling 6400 Hz. Formant analyzer ceiling also 6400 (`analysis/formant.py`).
@@ -116,7 +123,8 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
     background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
     spectrogram per chunk, wideband spectrogram per `WIDEBAND_HOP` (~5.8 ms, ≈8× finer
-    time res; `SpectrogramColumn.wide`), jitter/shimmer once/sec.
+    time res; `SpectrogramColumn.wide`), jitter/shimmer + register/voice-tendency
+    (`VoiceProfileSample`) once/sec.
     Plus an oscilloscope `WaveformFrame` per chunk. Results via `drain()` (FIFO of
     `PitchSample`/`FormantSample`/`VoiceQualitySample`/`SpectrogramColumn`/`WaveformFrame`)
     and `latest_pitch()`/
@@ -149,10 +157,10 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     `pipeline.pause/resume`; Range dropdown toggles F0 ceiling Normal (880 Hz/A5) ↔
     Extended (2100 Hz/C7) live (default Normal). View menu toggles six panes
     (pitch / formants / oscilloscope / spectrum / narrowband / wideband); Peak-hold
-    checkbox for the spectrum view. Numeric readout shows F0 + F1–F4
-    (color-matched). Voice-quality panel shows jitter/shimmer, red with ⚠ above the fixed
-    thresholds (NaN/silence → "--"). File end auto-stops the controls. UI prefs persist via
-    `config.py`.
+    checkbox for the spectrum view. A left-side vertical panel lists the numeric readouts
+    (F0 + F1–F4 color-matched; jitter/shimmer red with ⚠ above the fixed thresholds; estimated
+    register / voice tendency / HNR); plots stay stacked on the right. File end auto-stops the
+    controls. UI prefs persist via `config.py`.
 - `scripts/` — runnable verification/smoke scripts (not part of the package).
   - `run_app.py` — launch the GUI (`--file PATH` for file input, else mic).
   - `smoke_gui.py` — headless (offscreen) GUI check; the visual run needs a real machine.
