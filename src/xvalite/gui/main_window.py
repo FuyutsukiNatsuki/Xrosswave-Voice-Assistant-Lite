@@ -299,7 +299,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.tendency_label = QtWidgets.QLabel("声の傾向: --")
         self.hnr_label = QtWidgets.QLabel("HNR: --")
         self.register_label.setToolTip("地声寄り / ミックス / 裏声寄り（推定）")
-        self.tendency_label.setToolTip("低声寄り / 中間 / 高声寄り（声の音響的傾向）")
+        self.tendency_label.setToolTip("男声寄り / 中声 / 女声寄り（声の音響的傾向。性別判定ではありません）")
         for lbl in (self.register_label, self.tendency_label, self.hnr_label):
             lbl.setStyleSheet("color: #ddd;")
             lbl.setWordWrap(True)

@@ -48,7 +48,10 @@ _REGISTER_JA = {
     "Head": "裏声寄り",
     "Unknown": "--",
 }
-_TENDENCY_JA = {"low": "低声寄り", "mid": "中間", "high": "高声寄り", "unknown": "--"}
+# Display labels for the voice tendency. These describe the *voice* (声) leaning,
+# not a person's sex — the method (F0 + formants + HNR + spectrum) differs from
+# pitch-only male/female guessers, and "声" wording reads more naturally.
+_TENDENCY_JA = {"low": "男声寄り", "mid": "中声", "high": "女声寄り", "unknown": "--"}
 
 
 @dataclass(frozen=True)
