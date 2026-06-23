@@ -23,6 +23,7 @@ from ..analysis.spectrogram import (
     WIDEBAND_HOP,
     column_frequencies,
 )
+from ..analysis.pitch import note_name
 from ..analysis.voice_quality import JITTER_LOCAL_WARN, SHIMMER_LOCAL_WARN
 from ..audio.file_input import FileInput
 from ..audio.input import (
@@ -47,6 +48,7 @@ from ..pipeline import (
 from .instant_plots import SpectrumPlot, WaveformPlot
 from .scrolling_plot import ScrollingPlot
 from .spectrogram_plot import SpectrogramPlot
+from .theme import apply_dark_theme
 
 # Voice-quality readout styles.
 _VQ_BASE = "padding: 2px 8px; border-radius: 3px; font-weight: bold;"
@@ -94,6 +96,10 @@ class MainWindow(QtWidgets.QMainWindow):
     ) -> None:
         super().__init__()
         self.setWindowTitle("XVALite — voice trainer")
+
+        app = QtWidgets.QApplication.instance()
+        if app is not None:
+            apply_dark_theme(app)  # force dark regardless of OS theme
 
         self._config = load_config()
         self._loaded = False  # gate config saves during construction
@@ -278,7 +284,11 @@ class MainWindow(QtWidgets.QMainWindow):
         self.readout = {}
         for key, color in READOUT_SERIES:
             lbl = QtWidgets.QLabel(f"{key.upper()}: --")
-            lbl.setStyleSheet(f"color: {color}; font-weight: bold;")
+            if key == "f0":
+                lbl.setStyleSheet(f"color: {color}; font-weight: bold; font-size: 15px;")
+                lbl.setWordWrap(True)
+            else:
+                lbl.setStyleSheet(f"color: {color}; font-weight: bold;")
             self.readout[key] = lbl
             col.addWidget(lbl)
 
@@ -411,7 +421,13 @@ class MainWindow(QtWidgets.QMainWindow):
                 QtWidgets.QMessageBox.warning(self, "Input stopped", error)
 
     def _set_readout(self, key: str, value: float) -> None:
-        text = f"{key.upper()}: {value:.0f}" if np.isfinite(value) else f"{key.upper()}: --"
+        if key == "f0":
+            if np.isfinite(value):
+                text = f"F0: {value:.0f} Hz  {note_name(value)}"
+            else:
+                text = "F0: --"
+        else:
+            text = f"{key.upper()}: {value:.0f}" if np.isfinite(value) else f"{key.upper()}: --"
         self.readout[key].setText(text)
 
     def _reset_readout(self) -> None:

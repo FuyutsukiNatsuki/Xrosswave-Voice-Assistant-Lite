@@ -7,10 +7,29 @@ can leave gaps in the trajectory.
 
 from __future__ import annotations
 
+import math
 from typing import Tuple
 
 import numpy as np
 import parselmouth
+
+_NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+
+
+def note_name(freq: float, a4: float = 440.0) -> str:
+    """Nearest musical note + cents for a frequency, e.g. ``A4 +12¢``.
+
+    Empty string for non-positive / non-finite input. A440 reference.
+    """
+    if not np.isfinite(freq) or freq <= 0:
+        return ""
+    midi = 69 + 12 * math.log2(freq / a4)
+    nearest = int(round(midi))
+    cents = int(round((midi - nearest) * 100))
+    name = _NOTE_NAMES[nearest % 12]
+    octave = nearest // 12 - 1
+    sign = "+" if cents >= 0 else "−"
+    return f"{name}{octave} {sign}{abs(cents)}¢"
 
 # Reasonable defaults for human voice. Tunable later / per user.
 DEFAULT_PITCH_FLOOR = 75.0
