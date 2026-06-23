@@ -440,8 +440,8 @@ class MainWindow(QtWidgets.QMainWindow):
             self.tendency_label.setText("声の傾向: --")
             self.hnr_label.setText("HNR: --")
             return
-        self.register_label.setText(f"声区: {p.register_ja}（{p.register_conf}）")
-        self.tendency_label.setText(f"声の傾向: {p.tendency_ja}（{p.tendency_conf}）")
+        self.register_label.setText(f"声区: {p.register_ja}（確度：{p.register_conf}）")
+        self.tendency_label.setText(f"声の傾向: {p.tendency_ja}（確度：{p.tendency_conf}）")
         hnr = f"{p.hnr:.1f} dB" if np.isfinite(p.hnr) else "--"
         self.hnr_label.setText(f"HNR: {hnr}")
 
