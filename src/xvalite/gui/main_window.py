@@ -33,6 +33,7 @@ from ..audio.input import (
     list_output_devices,
 )
 from ..config import load_config, save_config
+from ..i18n import LANGUAGES, get_language, set_language, tr
 from ..pipeline import (
     DEFAULT_SILENCE_DB,
     SPECTRUM_MAX_FREQ,
@@ -103,6 +104,16 @@ class MainWindow(QtWidgets.QMainWindow):
 
         self._config = load_config()
         self._loaded = False  # gate config saves during construction
+
+        # Resolve language: saved choice, else system locale, default ja.
+        saved_lang = self._config.get("language")
+        if saved_lang in LANGUAGES:
+            lang = saved_lang
+        else:
+            lang = "ja" if QtCore.QLocale.system().name().startswith("ja") else "en"
+        set_language(lang)
+        self._config["language"] = lang
+        self._last_profile = None  # for re-rendering the estimate on language switch
 
         self.samplerate = samplerate
         self.device = device
@@ -182,6 +193,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._timer.timeout.connect(self._on_tick)
 
         self._apply_config()
+        self._retranslate()
         self._sync_source_widgets()
         self._set_running_ui(False)
         self._loaded = True
@@ -227,7 +239,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.vol_value = QtWidgets.QLabel(f"{DEFAULT_VOLUME_PCT}%")
         self.vol_slider.valueChanged.connect(self._on_volume_changed)
 
-        row.addWidget(QtWidgets.QLabel("Source:"))
+        self._lbl_source = QtWidgets.QLabel("Source:")
+        row.addWidget(self._lbl_source)
         row.addWidget(self.src_combo)
         row.addWidget(self.device_label)
         row.addWidget(self.device_combo)
@@ -258,12 +271,22 @@ class MainWindow(QtWidgets.QMainWindow):
         self.peak_check.setToolTip("Hold the per-frequency maximum on the spectrum view")
         self.peak_check.toggled.connect(self._on_peak_hold_toggled)
 
+        # Language picker (top-right). Language names are shown in their own script.
+        self._lbl_lang = QtWidgets.QLabel("Language:")
+        self.lang_combo = QtWidgets.QComboBox()
+        for code, name in LANGUAGES.items():
+            self.lang_combo.addItem(name, code)
+        self.lang_combo.currentIndexChanged.connect(self._on_language_changed)
+
+        self._lbl_range = QtWidgets.QLabel("Range:")
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
-        row.addWidget(QtWidgets.QLabel("Range:"))
+        row.addWidget(self._lbl_range)
         row.addWidget(self.mode_combo)
         row.addWidget(self.peak_check)
         row.addStretch(1)
+        row.addWidget(self._lbl_lang)
+        row.addWidget(self.lang_combo)
         return row
 
     def _build_left_panel(self) -> QtWidgets.QWidget:
@@ -274,13 +297,14 @@ class MainWindow(QtWidgets.QMainWindow):
         col.setContentsMargins(6, 4, 6, 4)
         col.setSpacing(3)
 
-        def header(text: str) -> None:
+        def header(text: str) -> QtWidgets.QLabel:
             lbl = QtWidgets.QLabel(text)
             lbl.setStyleSheet("color: #9ad; font-weight: bold; margin-top: 6px;")
             col.addWidget(lbl)
+            return lbl
 
         # Pitch / formants.
-        header("ピッチ・フォルマント")
+        self._hdr_pf = header("ピッチ・フォルマント")
         self.readout = {}
         for key, color in READOUT_SERIES:
             lbl = QtWidgets.QLabel(f"{key.upper()}: --")
@@ -293,7 +317,7 @@ class MainWindow(QtWidgets.QMainWindow):
             col.addWidget(lbl)
 
         # Voice quality.
-        header("声質")
+        self._hdr_q = header("声質")
         self.jitter_label = QtWidgets.QLabel("Jitter: --")
         self.shimmer_label = QtWidgets.QLabel("Shimmer: --")
         self.jitter_label.setToolTip(f"warns above {JITTER_LOCAL_WARN:.0%}")
@@ -304,7 +328,7 @@ class MainWindow(QtWidgets.QMainWindow):
         col.addWidget(self.shimmer_label)
 
         # Estimation (register + voice tendency).
-        header("推定")
+        self._hdr_e = header("推定")
         self.register_label = QtWidgets.QLabel("声区: --")
         self.tendency_label = QtWidgets.QLabel("声の傾向: --")
         self.hnr_label = QtWidgets.QLabel("HNR: --")
@@ -446,18 +470,27 @@ class MainWindow(QtWidgets.QMainWindow):
         self.shimmer_label.setText("Shimmer: --")
         self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
         self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
-        self.register_label.setText("声区: --")
-        self.tendency_label.setText("声の傾向: --")
+        self._last_profile = None
+        self.register_label.setText(f"{tr('register')}: --")
+        self.tendency_label.setText(f"{tr('tendency')}: --")
         self.hnr_label.setText("HNR: --")
 
     def _update_voice_profile(self, p) -> None:
-        if p.register == "Unknown":
-            self.register_label.setText("声区: --")
-            self.tendency_label.setText("声の傾向: --")
+        self._last_profile = p
+        reg_name = tr("register")
+        ten_name = tr("tendency")
+        if p is None or p.register == "Unknown":
+            self.register_label.setText(f"{reg_name}: --")
+            self.tendency_label.setText(f"{ten_name}: --")
             self.hnr_label.setText("HNR: --")
             return
-        self.register_label.setText(f"声区: {p.register_ja}（確度：{p.register_conf}）")
-        self.tendency_label.setText(f"声の傾向: {p.tendency_ja}（確度：{p.tendency_conf}）")
+        conf = tr("conf")
+        reg = tr(f"register.{p.register}")
+        rc = tr(f"conf.{p.register_conf}")
+        ten = tr(f"tendency.{p.tendency}")
+        tc = tr(f"conf.{p.tendency_conf}")
+        self.register_label.setText(f"{reg_name}: {reg}（{conf}：{rc}）")
+        self.tendency_label.setText(f"{ten_name}: {ten}（{conf}：{tc}）")
         hnr = f"{p.hnr:.1f} dB" if np.isfinite(p.hnr) else "--"
         self.hnr_label.setText(f"HNR: {hnr}")
 
@@ -480,10 +513,10 @@ class MainWindow(QtWidgets.QMainWindow):
             return
         if checked:
             self.pipeline.pause()
-            self.pause_btn.setText("Resume")
+            self.pause_btn.setText(tr("resume"))
         else:
             self.pipeline.resume()
-            self.pause_btn.setText("Pause")
+            self.pause_btn.setText(tr("pause"))
 
     def _on_mode_changed(self, _index: int) -> None:
         self._ceiling = float(self.mode_combo.currentData())
@@ -524,7 +557,8 @@ class MainWindow(QtWidgets.QMainWindow):
 
     # -- View menu + config -----------------------------------------------
     def _build_view_menu(self) -> None:
-        menu = self.menuBar().addMenu("View")
+        self._view_menu = self.menuBar().addMenu(tr("menu_view"))
+        menu = self._view_menu
         self._panel_actions = {}
         for key, label in PANELS:
             action = QtGui.QAction(label, self, checkable=True)
@@ -532,8 +566,41 @@ class MainWindow(QtWidgets.QMainWindow):
             menu.addAction(action)
             self._panel_actions[key] = action
 
+    def _on_language_changed(self, _index: int) -> None:
+        set_language(self.lang_combo.currentData())
+        self._retranslate()
+        self._save_config()
+
+    def _retranslate(self) -> None:
+        """Apply the current language to all translatable widgets (live switch)."""
+        self._lbl_source.setText(tr("source"))
+        self.device_label.setText(tr("device"))
+        self.browse_btn.setText(tr("browse"))
+        self.output_label.setText(tr("output"))
+        self.vol_label.setText(tr("vol"))
+        self._lbl_range.setText(tr("range"))
+        self._lbl_lang.setText(tr("language"))
+        self.peak_check.setText(tr("peak_hold"))
+        self.src_combo.setItemText(0, tr("mic"))
+        self.src_combo.setItemText(1, tr("file"))
+        self.mode_combo.setItemText(0, tr("range_normal"))
+        self.mode_combo.setItemText(1, tr("range_extended"))
+        self.device_combo.setItemText(0, tr("default_device"))
+        self.output_combo.setItemText(0, tr("default_device"))
+        self._hdr_pf.setText(tr("hdr_pitch_formant"))
+        self._hdr_q.setText(tr("hdr_quality"))
+        self._hdr_e.setText(tr("hdr_estimate"))
+        self._view_menu.setTitle(tr("menu_view"))
+        self.start_btn.setText(tr("stop") if self._running else tr("start"))
+        self.pause_btn.setText(tr("resume") if self.pause_btn.isChecked() else tr("pause"))
+        self._sync_source_widgets()
+        self._update_voice_profile(self._last_profile)
+
     def _apply_config(self) -> None:
         cfg = self._config
+        pos = self.lang_combo.findData(get_language())
+        if pos >= 0:
+            self.lang_combo.setCurrentIndex(pos)
         self.mode_combo.setCurrentIndex(1 if cfg["range_mode"] == "extended" else 0)
         self.vol_slider.setValue(int(cfg["volume_pct"]))
         self.peak_check.setChecked(bool(cfg.get("peak_hold", True)))
@@ -561,6 +628,7 @@ class MainWindow(QtWidgets.QMainWindow):
                 "volume_pct": self.vol_slider.value(),
                 "panels": {k: self._panel_actions[k].isChecked() for k, _ in PANELS},
                 "peak_hold": self.peak_check.isChecked(),
+                "language": get_language(),
                 "input_device": self.device_combo.currentText(),
                 "output_device": self.output_combo.currentText(),
             }
@@ -588,12 +656,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.device_combo.setVisible(not is_file)
         if is_file:
             self.file_label.setText(
-                os.path.basename(self._file_path) if self._file_path else "(no file selected)"
+                os.path.basename(self._file_path) if self._file_path else tr("no_file")
             )
 
     def _set_running_ui(self, running: bool) -> None:
         self._running = running
-        self.start_btn.setText("Stop" if running else "Start")
+        self.start_btn.setText(tr("stop") if running else tr("start"))
         self.src_combo.setEnabled(not running)
         self.browse_btn.setEnabled(not running)
         self.device_combo.setEnabled(not running)
@@ -602,7 +670,7 @@ class MainWindow(QtWidgets.QMainWindow):
         if not running:
             self.pause_btn.blockSignals(True)
             self.pause_btn.setChecked(False)
-            self.pause_btn.setText("Pause")
+            self.pause_btn.setText(tr("pause"))
             self.pause_btn.blockSignals(False)
 
     def closeEvent(self, event) -> None:  # noqa: N802 (Qt signature)

@@ -30,6 +30,7 @@ DEFAULTS: Dict[str, Any] = {
         "wideband": False,
     },
     "peak_hold": True,               # spectrum view peak-hold trace
+    "language": None,                # "ja" | "en"; None → resolve from system locale
     "input_device": None,            # combo label of the chosen device, or None
     "output_device": None,
 }

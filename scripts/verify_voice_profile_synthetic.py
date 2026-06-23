@@ -37,10 +37,10 @@ def main() -> int:
     clean = measure_voice_profile(tone(150.0, 8, noise=0.0), SR)
     breathy = measure_voice_profile(tone(150.0, 8, noise=0.6, seed=1), SR)
 
-    print(f"low  tone:  F0={low.mean_f0:6.1f}  tendency={low.tendency_ja}  "
-          f"register={low.register_ja}  HNR={low.hnr:.1f}")
-    print(f"high tone:  F0={high.mean_f0:6.1f}  tendency={high.tendency_ja}  "
-          f"register={high.register_ja}  HNR={high.hnr:.1f}")
+    print(f"low  tone:  F0={low.mean_f0:6.1f}  tendency={low.tendency}  "
+          f"register={low.register}  HNR={low.hnr:.1f}")
+    print(f"high tone:  F0={high.mean_f0:6.1f}  tendency={high.tendency}  "
+          f"register={high.register}  HNR={high.hnr:.1f}")
     print(f"clean:   HNR={clean.hnr:.1f}    breathy: HNR={breathy.hnr:.1f}")
 
     checks = {

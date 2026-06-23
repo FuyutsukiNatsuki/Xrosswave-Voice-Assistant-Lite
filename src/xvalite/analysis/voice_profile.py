@@ -42,36 +42,17 @@ F0_LOW = 165.0
 F1_LOW = 480.0
 CENTROID_HIGH = 1850.0
 
-_REGISTER_JA = {
-    "Chest": "地声寄り",
-    "Mix": "ミックス",
-    "Head": "裏声寄り",
-    "Unknown": "--",
-}
-# Display labels for the voice tendency. These describe the *voice* (声) leaning,
-# not a person's sex — the method (F0 + formants + HNR + spectrum) differs from
-# pitch-only male/female guessers, and "声" wording reads more naturally.
-_TENDENCY_JA = {"low": "男声寄り", "mid": "中声", "high": "女声寄り", "unknown": "--"}
-
-
 @dataclass(frozen=True)
 class VoiceProfile:
+    # Language-neutral keys; the GUI translates them via i18n.
     register: str          # Chest | Mix | Head | Unknown
-    register_conf: str     # 高 | 中 | 低 | --
+    register_conf: str     # high | medium | low | --
     tendency: str          # low | mid | high | unknown
     tendency_conf: str
     mean_f0: float
     mean_f1: float
     hnr: float
     centroid: float
-
-    @property
-    def register_ja(self) -> str:
-        return _REGISTER_JA.get(self.register, "--")
-
-    @property
-    def tendency_ja(self) -> str:
-        return _TENDENCY_JA.get(self.tendency, "--")
 
 
 def _spectral_centroid(samples: np.ndarray, samplerate: int) -> float:
@@ -102,12 +83,12 @@ def _estimate_register(f0: float, f1: float, hnr: float, centroid: float):
     chest = f0 < CHEST_F0_MAX and f1 > CHEST_F1_MIN and hnr > CHEST_HNR_MIN and centroid < CHEST_CENTROID_MAX
     head = f0 > HEAD_F0_MIN or (f1 < HEAD_F1_MAX and hnr < HEAD_HNR_MAX)
     if chest:
-        conf = "高" if (f0 < 230 and hnr > 16 and centroid < 1700) else "中"
+        conf = "high" if (f0 < 230 and hnr > 16 and centroid < 1700) else "medium"
         return "Chest", conf
     if head:
-        conf = "高" if f0 > 560 else "中"
+        conf = "high" if f0 > 560 else "medium"
         return "Head", conf
-    return "Mix", "低"  # the genuinely fuzzy middle
+    return "Mix", "low"  # the genuinely fuzzy middle
 
 
 def _estimate_tendency(f0: float, f1: float, centroid: float):
@@ -121,10 +102,10 @@ def _estimate_tendency(f0: float, f1: float, centroid: float):
     if centroid > CENTROID_HIGH:
         score += 0.6
     if score >= 2.2:
-        return "high", ("高" if score >= 3.0 else "中")
+        return "high", ("high" if score >= 3.0 else "medium")
     if score <= -1.8:
-        return "low", ("高" if score <= -2.5 else "中")
-    return "mid", "中"
+        return "low", ("high" if score <= -2.5 else "medium")
+    return "mid", "medium"
 
 
 def measure_voice_profile(

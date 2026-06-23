@@ -38,6 +38,7 @@ def main() -> int:
     shown = {"pitch", "oscilloscope", "spectrum", "narrowband"}
     for key, action in window._panel_actions.items():
         action.setChecked(key in shown)
+    window.lang_combo.setCurrentIndex(window.lang_combo.findData("ja"))  # JA UI for README
     window.resize(1140, 1020)
     window.show()
     window.start()
