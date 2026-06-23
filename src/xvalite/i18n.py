@@ -41,7 +41,22 @@ _STRINGS = {
     "hdr_estimate": {"ja": "推定", "en": "Estimation"},
     "register": {"ja": "声区", "en": "Register"},
     "tendency": {"ja": "声の傾向", "en": "Voice tendency"},
+    "vowel": {"ja": "母音", "en": "Vowel"},
+    "resonance": {"ja": "響き", "en": "Resonance"},
     "conf": {"ja": "確度", "en": "conf"},
+    # vowel values (kana in JA, romaji in EN)
+    "vowel.a": {"ja": "あ", "en": "a"},
+    "vowel.e": {"ja": "え", "en": "e"},
+    "vowel.i": {"ja": "い", "en": "i"},
+    "vowel.o": {"ja": "お", "en": "o"},
+    "vowel.u": {"ja": "う", "en": "u"},
+    # resonance values
+    "resonance.bright": {"ja": "明るい・前寄り", "en": "Bright / Forward"},
+    "resonance.balanced": {"ja": "バランス型", "en": "Balanced"},
+    "resonance.dark": {"ja": "暗い・カバー", "en": "Dark / Covered"},
+    "resonance.deep_pharyngeal": {"ja": "深い咽頭腔", "en": "Deep pharyngeal"},
+    "resonance.twang": {"ja": "鼻腔・トゥワング", "en": "Twang / Nasal"},
+    "resonance.breathy": {"ja": "息漏れ・かすれ", "en": "Breathy / Hazy"},
     # register values
     "register.Chest": {"ja": "地声寄り", "en": "Chest"},
     "register.Mix": {"ja": "ミックス", "en": "Mix"},

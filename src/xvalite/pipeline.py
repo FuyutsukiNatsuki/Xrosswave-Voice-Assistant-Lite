@@ -367,8 +367,10 @@ class AnalysisPipeline:
                     if _dbfs(window) < self.silence_db:
                         vq = VoiceQuality(float("nan"), float("nan"))
                         profile = VoiceProfile(
-                            "Unknown", "--", "unknown", "--",
-                            float("nan"), float("nan"), float("nan"), float("nan"),
+                            "Unknown", "--", "unknown", "--", "unknown", "--",
+                            "unknown", "--",
+                            float("nan"), float("nan"), float("nan"),
+                            float("nan"), float("nan"),
                         )
                     else:
                         vq = measure_voice_quality(window, self.samplerate)

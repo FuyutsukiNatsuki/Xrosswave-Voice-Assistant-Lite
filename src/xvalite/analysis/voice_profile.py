@@ -16,6 +16,7 @@ stands in for the aperiodicity/breathiness cue.
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -42,6 +43,24 @@ F0_LOW = 165.0
 F1_LOW = 480.0
 CENTROID_HIGH = 1850.0
 
+# --- vowel reference formants (F1, F2) in Hz, rough adult averages ---
+_VOWEL_REF = {
+    "a": (800.0, 1200.0),
+    "e": (500.0, 1900.0),
+    "i": (300.0, 2300.0),
+    "o": (500.0, 900.0),
+    "u": (380.0, 1300.0),
+}
+
+# --- resonance thresholds (tunable; centroid in Hz) ---
+RES_BREATHY_HNR = 8.0
+RES_TWANG_CENTROID = 2600.0
+RES_BRIGHT_CENTROID = 2000.0
+RES_DARK_CENTROID = 1400.0
+RES_DEEP_CENTROID = 1100.0
+RES_DEEP_F1_MAX = 400.0
+
+
 @dataclass(frozen=True)
 class VoiceProfile:
     # Language-neutral keys; the GUI translates them via i18n.
@@ -49,8 +68,13 @@ class VoiceProfile:
     register_conf: str     # high | medium | low | --
     tendency: str          # low | mid | high | unknown
     tendency_conf: str
+    vowel: str             # a | e | i | o | u | unknown
+    vowel_conf: str
+    resonance: str         # bright | balanced | dark | deep_pharyngeal | twang | breathy | unknown
+    resonance_conf: str
     mean_f0: float
     mean_f1: float
+    mean_f2: float
     hnr: float
     centroid: float
 
@@ -91,6 +115,36 @@ def _estimate_register(f0: float, f1: float, hnr: float, centroid: float):
     return "Mix", "low"  # the genuinely fuzzy middle
 
 
+def _estimate_vowel(f1: float, f2: float):
+    """Nearest Japanese vowel in (F1, F2) space + a margin-based confidence."""
+    if not (np.isfinite(f1) and np.isfinite(f2)):
+        return "unknown", "--"
+    dists = {v: math.hypot(f1 - rf1, f2 - rf2) for v, (rf1, rf2) in _VOWEL_REF.items()}
+    ordered = sorted(dists.values())
+    best = min(dists, key=dists.get)
+    ratio = ordered[0] / ordered[1] if ordered[1] > 0 else 1.0
+    conf = "high" if ratio < 0.6 else ("medium" if ratio < 0.85 else "low")
+    return best, conf
+
+
+def _estimate_resonance(f1: float, f2: float, hnr: float, centroid: float):
+    """Approximate resonance/timbre type. Twang and deep-pharyngeal are hard to
+    pin down from F1/F2/HNR alone, so they always carry low confidence."""
+    if not np.isfinite(centroid):
+        return "unknown", "--"
+    if np.isfinite(hnr) and hnr < RES_BREATHY_HNR:
+        return "breathy", "medium"
+    if centroid >= RES_TWANG_CENTROID:
+        return "twang", "low"
+    if centroid >= RES_BRIGHT_CENTROID:
+        return "bright", "medium"
+    if centroid <= RES_DEEP_CENTROID and np.isfinite(f1) and f1 < RES_DEEP_F1_MAX:
+        return "deep_pharyngeal", "low"
+    if centroid <= RES_DARK_CENTROID:
+        return "dark", "medium"
+    return "balanced", "high"
+
+
 def _estimate_tendency(f0: float, f1: float, centroid: float):
     score = 0.0
     if f0 > F0_HIGH:
@@ -118,13 +172,24 @@ def measure_voice_profile(
     _, f0arr = extract_f0(samples, samplerate, pitch_floor, pitch_ceiling)
     voiced = f0arr[np.isfinite(f0arr)]
     mean_f0 = float(np.mean(voiced)) if voiced.size else float("nan")
-    mean_f1 = float(latest_formants(samples, samplerate)[0])
+    formants = latest_formants(samples, samplerate)
+    mean_f1 = float(formants[0])
+    mean_f2 = float(formants[1])
     hnr = _hnr(samples, samplerate, pitch_floor)
     centroid = _spectral_centroid(samples, samplerate)
 
+    vowel, vconf = _estimate_vowel(mean_f1, mean_f2)
+    resonance, resconf = _estimate_resonance(mean_f1, mean_f2, hnr, centroid)
+
     if not (np.isfinite(mean_f0) and np.isfinite(mean_f1)):
-        return VoiceProfile("Unknown", "--", "unknown", "--", mean_f0, mean_f1, hnr, centroid)
+        return VoiceProfile(
+            "Unknown", "--", "unknown", "--", vowel, vconf, resonance, resconf,
+            mean_f0, mean_f1, mean_f2, hnr, centroid,
+        )
 
     register, rconf = _estimate_register(mean_f0, mean_f1, hnr, centroid)
     tendency, tconf = _estimate_tendency(mean_f0, mean_f1, centroid)
-    return VoiceProfile(register, rconf, tendency, tconf, mean_f0, mean_f1, hnr, centroid)
+    return VoiceProfile(
+        register, rconf, tendency, tconf, vowel, vconf, resonance, resconf,
+        mean_f0, mean_f1, mean_f2, hnr, centroid,
+    )

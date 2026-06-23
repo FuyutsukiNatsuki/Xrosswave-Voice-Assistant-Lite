@@ -329,12 +329,14 @@ class MainWindow(QtWidgets.QMainWindow):
 
         # Estimation (register + voice tendency).
         self._hdr_e = header("推定")
+        self.vowel_label = QtWidgets.QLabel("母音: --")
+        self.resonance_label = QtWidgets.QLabel("響き: --")
         self.register_label = QtWidgets.QLabel("声区: --")
         self.tendency_label = QtWidgets.QLabel("声の傾向: --")
         self.hnr_label = QtWidgets.QLabel("HNR: --")
-        self.register_label.setToolTip("地声寄り / ミックス / 裏声寄り（推定）")
         self.tendency_label.setToolTip("男声寄り / 中声 / 女声寄り（声の音響的傾向。性別判定ではありません）")
-        for lbl in (self.register_label, self.tendency_label, self.hnr_label):
+        for lbl in (self.vowel_label, self.resonance_label, self.register_label,
+                    self.tendency_label, self.hnr_label):
             lbl.setStyleSheet("color: #ddd;")
             lbl.setWordWrap(True)
             col.addWidget(lbl)
@@ -471,27 +473,42 @@ class MainWindow(QtWidgets.QMainWindow):
         self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
         self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
         self._last_profile = None
+        self.vowel_label.setText(f"{tr('vowel')}: --")
+        self.resonance_label.setText(f"{tr('resonance')}: --")
         self.register_label.setText(f"{tr('register')}: --")
         self.tendency_label.setText(f"{tr('tendency')}: --")
         self.hnr_label.setText("HNR: --")
 
     def _update_voice_profile(self, p) -> None:
         self._last_profile = p
-        reg_name = tr("register")
-        ten_name = tr("tendency")
-        if p is None or p.register == "Unknown":
-            self.register_label.setText(f"{reg_name}: --")
-            self.tendency_label.setText(f"{ten_name}: --")
-            self.hnr_label.setText("HNR: --")
-            return
         conf = tr("conf")
-        reg = tr(f"register.{p.register}")
-        rc = tr(f"conf.{p.register_conf}")
-        ten = tr(f"tendency.{p.tendency}")
-        tc = tr(f"conf.{p.tendency_conf}")
-        self.register_label.setText(f"{reg_name}: {reg}（{conf}：{rc}）")
-        self.tendency_label.setText(f"{ten_name}: {ten}（{conf}：{tc}）")
-        hnr = f"{p.hnr:.1f} dB" if np.isfinite(p.hnr) else "--"
+
+        def line(name_key: str, value_key: str, value: str, value_conf: str) -> str:
+            if value in ("unknown", "Unknown") or value_conf == "--":
+                return f"{tr(name_key)}: --"
+            return f"{tr(name_key)}: {tr(value_key + '.' + value)}（{conf}：{tr('conf.' + value_conf)}）"
+
+        if p is None:
+            p_unknown = True
+        else:
+            p_unknown = False
+        # Vowel + resonance are valid even mid-transition; register/tendency may be Unknown.
+        self.vowel_label.setText(
+            f"{tr('vowel')}: --" if p_unknown else line("vowel", "vowel", p.vowel, p.vowel_conf)
+        )
+        self.resonance_label.setText(
+            f"{tr('resonance')}: --" if p_unknown
+            else line("resonance", "resonance", p.resonance, p.resonance_conf)
+        )
+        self.register_label.setText(
+            f"{tr('register')}: --" if p_unknown
+            else line("register", "register", p.register, p.register_conf)
+        )
+        self.tendency_label.setText(
+            f"{tr('tendency')}: --" if p_unknown
+            else line("tendency", "tendency", p.tendency, p.tendency_conf)
+        )
+        hnr = f"{p.hnr:.1f} dB" if (p is not None and np.isfinite(p.hnr)) else "--"
         self.hnr_label.setText(f"HNR: {hnr}")
 
     @staticmethod

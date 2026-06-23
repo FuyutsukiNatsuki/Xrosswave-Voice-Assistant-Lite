@@ -122,7 +122,7 @@
 方針: i18n=ライブ切替 / レポート=pyqtgraph描画 / 録音=独立ボタン。順序 A→E。
 - [x] **A**: ダークモード強制(`gui/theme.apply_dark_theme`、Fusion暗色) ＋ ピッチ音階表示(`pitch.note_name`→F0行に `B3 +38¢` 併記・大きめ)
 - [x] **B**: i18n（`i18n.py`＋`tr()`、日英ライブ切替＋右上ドロップダウン、初回システム言語、設定保存）。操作系＋推定表示語＋Viewメニュー題を翻訳、グラフ題/軸は英語据え置き。voice_profileは言語中立キーを返すよう変更（確度=high/medium/low）
-- [ ] **C**: 母音推定（F1/F2最近傍, 日本語5母音）＋ 響きタイプ推定（添付表6種, 日本語表記。Twang/Pharyngealは確度低め前提）
+- [x] **C**: 母音推定（F1/F2最近傍, 日本語5母音, 確度付き）＋ 響きタイプ推定（6種: bright/balanced/dark/deep_pharyngeal/twang/breathy、centroid+HNR+F1ヒューリスティック、Twang/Pharyngealは確度low固定）。左パネル「推定」に母音・響きを追加。i18nに語彙追加。合成母音/a//i/で母音判定を検証
 - [ ] **D**: 簡易録音（44.1kHz/24bit/mono WAV → exe配下 `/rec/YYYY-MM-DD-nnnn.wav`、独立録音ボタン）
 - [ ] **E**: 分析レポートモード（平均ピッチ/母音別平均フォルマント(F1-F2空間)/声傾向割合/声区割合、pyqtgraph描画＋PNG出力）
 

@@ -31,6 +31,27 @@ def tone(f0, n_harmonics, noise=0.0, seed=0):
     return (0.3 * sig / np.max(np.abs(sig))).astype(np.float32)
 
 
+def _resonator(x, freq, bw):
+    r = np.exp(-np.pi * bw / SR)
+    a1 = 2 * r * np.cos(2 * np.pi * freq / SR)
+    a2 = -(r ** 2)
+    y = np.zeros_like(x)
+    y1 = y2 = 0.0
+    for n in range(x.size):
+        y0 = x[n] + a1 * y1 + a2 * y2
+        y[n] = y0
+        y2, y1 = y1, y0
+    return y
+
+
+def vowel_sound(f1, f2, seed=0):
+    """A whispered-vowel analogue: noise through two formant resonators."""
+    rng = np.random.default_rng(seed)
+    src = rng.standard_normal(int(SR * DUR))
+    sig = _resonator(src, f1, 80.0) / 1.0 + _resonator(src, f2, 100.0)
+    return (0.3 * sig / (np.max(np.abs(sig)) + 1e-9)).astype(np.float32)
+
+
 def main() -> int:
     low = measure_voice_profile(tone(150.0, 10), SR)
     high = measure_voice_profile(tone(600.0, 4), SR)
@@ -43,6 +64,12 @@ def main() -> int:
           f"register={high.register}  HNR={high.hnr:.1f}")
     print(f"clean:   HNR={clean.hnr:.1f}    breathy: HNR={breathy.hnr:.1f}")
 
+    # Vowel estimation on formant-filtered noise (/a/: F1 800/F2 1200, /i/: 300/2300).
+    va = measure_voice_profile(vowel_sound(800.0, 1200.0), SR)
+    vi = measure_voice_profile(vowel_sound(300.0, 2300.0), SR)
+    print(f"/a/ -> vowel={va.vowel}  (F1={va.mean_f1:.0f} F2={va.mean_f2:.0f})")
+    print(f"/i/ -> vowel={vi.vowel}  (F1={vi.mean_f1:.0f} F2={vi.mean_f2:.0f})")
+
     checks = {
         # The real-voice tendency thresholds shouldn't read a 150 Hz tone as a
         # high voice; exact low/mid on a synthetic buzz isn't meaningful.
@@ -53,6 +80,8 @@ def main() -> int:
         and clean.hnr > breathy.hnr,
         "voiced tones classified (not Unknown)": low.register != "Unknown"
         and high.register != "Unknown",
+        "/a/ vowel estimated as a": va.vowel == "a",
+        "/i/ vowel estimated as i": vi.vowel == "i",
     }
     ok = True
     for name, passed in checks.items():
