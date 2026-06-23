@@ -43,13 +43,26 @@ F0_LOW = 165.0
 F1_LOW = 480.0
 CENTROID_HIGH = 1850.0
 
-# --- vowel reference formants (F1, F2) in Hz, rough adult averages ---
-_VOWEL_REF = {
-    "a": (800.0, 1200.0),
-    "e": (500.0, 1900.0),
-    "i": (300.0, 2300.0),
+# --- vowel reference formants (F1, F2) in Hz: male/female averages and their
+# mean (used for classification). Values from cited Japanese-vowel averages. ---
+VOWEL_REF_MALE = {
+    "a": (700.0, 1200.0),
+    "i": (300.0, 2200.0),
+    "u": (400.0, 1300.0),
+    "e": (500.0, 1700.0),
     "o": (500.0, 900.0),
-    "u": (380.0, 1300.0),
+}
+VOWEL_REF_FEMALE = {
+    "a": (850.0, 1300.0),
+    "i": (350.0, 2400.0),
+    "u": (450.0, 1500.0),
+    "e": (600.0, 1900.0),
+    "o": (600.0, 1000.0),
+}
+_VOWEL_REF = {
+    v: ((VOWEL_REF_MALE[v][0] + VOWEL_REF_FEMALE[v][0]) / 2,
+        (VOWEL_REF_MALE[v][1] + VOWEL_REF_FEMALE[v][1]) / 2)
+    for v in VOWEL_REF_MALE
 }
 
 # --- resonance thresholds (tunable; centroid in Hz) ---

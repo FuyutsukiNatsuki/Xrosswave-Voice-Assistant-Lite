@@ -124,7 +124,9 @@
 - [x] **B**: i18n（`i18n.py`＋`tr()`、日英ライブ切替＋右上ドロップダウン、初回システム言語、設定保存）。操作系＋推定表示語＋Viewメニュー題を翻訳、グラフ題/軸は英語据え置き。voice_profileは言語中立キーを返すよう変更（確度=high/medium/low）
 - [x] **C**: 母音推定（F1/F2最近傍, 日本語5母音, 確度付き）＋ 響きタイプ推定（6種: bright/balanced/dark/deep_pharyngeal/twang/breathy、centroid+HNR+F1ヒューリスティック、Twang/Pharyngealは確度low固定）。左パネル「推定」に母音・響きを追加。i18nに語彙追加。合成母音/a//i/で母音判定を検証
 - [x] **D**: 簡易録音（`audio/recording.py`＋pipeline.start/stop_recording、soundfile PCM_24、exe配下`/rec/YYYY-MM-DD-nnnn.wav`、独立録音ボタン・マイク時のみ有効・停止で自動保存・一時停止中も録音継続）。`verify_recording.py`で形式/長さ検証 |
-- [ ] **E**: 分析レポートモード（平均ピッチ/母音別平均フォルマント(F1-F2空間)/声傾向割合/声区割合、pyqtgraph描画＋PNG出力）
+- [x] **E**: 分析レポートモード（`gui/report.py`）。レポートトグルON時のみ蓄積→Stopで別ウィンドウ表示。平均ピッチ(音名)/平均声質、声の傾向・声区・響きの割合（円グラフ=QPainter自作）、母音別フォルマントF1×F2プロット（男声/女声平均＝添付論文値＋あなたの声、pyqtgraph）、PNG出力(grab)。`smoke_report.py`で検証。
+
+> **v1.6 全フェーズ(A〜E)完了。** 全検証・スモーク合格。母音参照値は男声/女声平均(`VOWEL_REF_MALE/FEMALE`)＋その平均で分類。閾値類(`voice_profile.py` の `RES_*`/`CHEST_*` 等、`i18n` の表記)は実声で要調整の初期値。
 
 ### 技術メモ: フォルマント分析の高速化余地
 - 現状フォルマントとJitter/Shimmerは同じ1秒カデンス(`SlowSample`)に束ねている。1秒は要件上の選択で技術的限界ではない。

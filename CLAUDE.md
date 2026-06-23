@@ -48,8 +48,14 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 # Verify narrowband spectrogram (deterministic, no mic needed)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_spectrogram_synthetic.py
 
-# Verify register / voice-tendency estimation (deterministic, no mic needed)
+# Verify register / voice-tendency / vowel estimation (deterministic, no mic needed)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_profile_synthetic.py
+
+# Verify recording writes a valid 24-bit/44.1k/mono WAV
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_recording.py
+
+# Headless report-mode smoke test (offscreen)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\smoke_report.py
 
 # Live mic jitter/shimmer readout
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_quality_mic.py
@@ -119,7 +125,13 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     rFFT). `window_size` sets resolution: narrowband (2048 ≈ 21.5 Hz) vs wideband (256, zero-padded
     to 1024). Display ceiling 6400 Hz. Formant analyzer ceiling also 6400 (`analysis/formant.py`).
   - `config.py` — `load_config`/`save_config`: JSON UI settings at `%APPDATA%/XVALite/config.json`
-    (override dir via `XVALITE_CONFIG_DIR`). Persists range mode, volume, panel visibility, devices.
+    (override dir via `XVALITE_CONFIG_DIR`). Persists range mode, volume, panel visibility, devices, language.
+  - `i18n.py` — `tr()`/`set_language()`: ja/en string table for live UI translation
+    (controls + estimation terms; plot titles/axes stay English).
+  - `audio/recording.py` — `record_dir`/`next_record_path`: `rec/YYYY-MM-DD-nnnn.wav` next to the exe.
+  - `gui/theme.py` — `apply_dark_theme`: forced dark Fusion palette.
+  - `gui/report.py` — `ReportWindow` (report-mode summary: avg pitch/quality, ratio pie charts via
+    QPainter, vowel F1×F2 plot vs male/female refs, PNG export).
   - `pipeline.py` — `AnalysisPipeline`: ties a source to the analysis layer on a
     background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
     spectrogram per chunk, wideband spectrogram per `WIDEBAND_HOP` (~5.8 ms, ≈8× finer

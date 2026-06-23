@@ -48,6 +48,7 @@ from ..pipeline import (
     WaveformFrame,
 )
 from .instant_plots import SpectrumPlot, WaveformPlot
+from .report import ReportWindow, has_data
 from .scrolling_plot import ScrollingPlot
 from .spectrogram_plot import SpectrogramPlot
 from .theme import apply_dark_theme
@@ -122,6 +123,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._file_path = initial_file
         self.pipeline: AnalysisPipeline | None = None
         self._running = False
+        self._report = None       # session accumulator while report mode is on
+        self._report_win = None   # keep a reference so the window isn't GC'd
         self._ceiling = (
             EXTENDED_CEILING if self._config["range_mode"] == "extended" else NORMAL_CEILING
         )
@@ -278,6 +281,10 @@ class MainWindow(QtWidgets.QMainWindow):
         self.record_btn.toggled.connect(self._on_record_toggled)
         self._rec_path = None
 
+        # Report mode: accumulate session stats, show a report window on stop.
+        self.report_check = QtWidgets.QCheckBox("レポート")
+        self.report_check.setToolTip("オンで解析するとStop時に分析レポートを表示")
+
         # Language picker (top-right). Language names are shown in their own script.
         self._lbl_lang = QtWidgets.QLabel("Language:")
         self.lang_combo = QtWidgets.QComboBox()
@@ -292,6 +299,7 @@ class MainWindow(QtWidgets.QMainWindow):
         row.addWidget(self._lbl_range)
         row.addWidget(self.mode_combo)
         row.addWidget(self.peak_check)
+        row.addWidget(self.report_check)
         row.addStretch(1)
         row.addWidget(self._lbl_lang)
         row.addWidget(self.lang_combo)
@@ -403,8 +411,45 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spectrum_plot.clear_data()
         self._reset_vq_labels()
         self._reset_readout()
+        self._report = self._new_report() if self.report_check.isChecked() else None
         self._timer.start()
         self._set_running_ui(True)
+
+    @staticmethod
+    def _new_report() -> dict:
+        return {
+            "f0": [],
+            "vowel_f1f2": {v: [] for v in ("a", "e", "i", "o", "u")},
+            "tendency": {"low": 0, "mid": 0, "high": 0},
+            "register": {"Chest": 0, "Mix": 0, "Head": 0},
+            "resonance": {k: 0 for k in
+                          ("bright", "balanced", "dark", "deep_pharyngeal", "twang", "breathy")},
+            "hnr": [], "jitter": [], "shimmer": [], "seconds": 0.0,
+        }
+
+    def _accumulate(self, ev) -> None:
+        r = self._report
+        if isinstance(ev, PitchSample):
+            if np.isfinite(ev.f0):
+                r["f0"].append(ev.f0)
+            r["seconds"] = max(r["seconds"], ev.t)
+        elif isinstance(ev, VoiceProfileSample):
+            p = ev.profile
+            if p.register in r["register"]:
+                r["register"][p.register] += 1
+            if p.tendency in r["tendency"]:
+                r["tendency"][p.tendency] += 1
+            if p.resonance in r["resonance"]:
+                r["resonance"][p.resonance] += 1
+            if p.vowel in r["vowel_f1f2"] and np.isfinite(p.mean_f1) and np.isfinite(p.mean_f2):
+                r["vowel_f1f2"][p.vowel].append((p.mean_f1, p.mean_f2))
+            if np.isfinite(p.hnr):
+                r["hnr"].append(p.hnr)
+        elif isinstance(ev, VoiceQualitySample):
+            if np.isfinite(ev.voice_quality.jitter_local):
+                r["jitter"].append(ev.voice_quality.jitter_local)
+            if np.isfinite(ev.voice_quality.shimmer_local):
+                r["shimmer"].append(ev.voice_quality.shimmer_local)
 
     def _stop(self) -> None:
         self._timer.stop()
@@ -414,12 +459,18 @@ class MainWindow(QtWidgets.QMainWindow):
             self.pipeline.stop()
             self.pipeline = None
         self._set_running_ui(False)
+        report, self._report = self._report, None
+        if report is not None and has_data(report):
+            self._report_win = ReportWindow(report)
+            self._report_win.show()
 
     # -- timer tick --------------------------------------------------------
     def _on_tick(self) -> None:
         if self.pipeline is None:
             return
         for ev in self.pipeline.drain():
+            if self._report is not None:
+                self._accumulate(ev)
             if isinstance(ev, PitchSample):
                 self.pitch_plot.append("f0", ev.t, ev.f0)
                 self._set_readout("f0", ev.f0)
@@ -640,6 +691,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lbl_range.setText(tr("range"))
         self._lbl_lang.setText(tr("language"))
         self.peak_check.setText(tr("peak_hold"))
+        self.report_check.setText(tr("report_mode"))
         self.src_combo.setItemText(0, tr("mic"))
         self.src_combo.setItemText(1, tr("file"))
         self.mode_combo.setItemText(0, tr("range_normal"))
@@ -731,6 +783,7 @@ class MainWindow(QtWidgets.QMainWindow):
         # Recording: mic source only, while running.
         is_mic = self.src_combo.currentData() == "mic"
         self.record_btn.setEnabled(running and is_mic)
+        self.report_check.setEnabled(not running)  # mode chosen before Start
         if not running:
             self.pause_btn.blockSignals(True)
             self.pause_btn.setChecked(False)
