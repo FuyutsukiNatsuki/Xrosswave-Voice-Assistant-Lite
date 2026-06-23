@@ -30,6 +30,7 @@ from dataclasses import dataclass
 from typing import List, Optional, Protocol, Union
 
 import numpy as np
+import soundfile as sf
 
 from .analysis.formant import latest_formants
 from .analysis.pitch import DEFAULT_PITCH_FLOOR, latest_f0
@@ -224,6 +225,9 @@ class AnalysisPipeline:
         self._finished = threading.Event()
         self._error: Optional[str] = None  # set if the worker dies unexpectedly
 
+        self._rec_lock = threading.Lock()
+        self._rec_file: Optional[sf.SoundFile] = None  # open 24-bit WAV while recording
+
     # -- lifecycle ---------------------------------------------------------
     def start(self) -> None:
         if self._thread is not None:
@@ -237,7 +241,26 @@ class AnalysisPipeline:
         if self._thread is not None:
             self._thread.join(timeout=2.0)
             self._thread = None
+        self.stop_recording()
         self.source.stop()
+
+    # -- recording (independent of analysis; mic chunks → 24-bit WAV) ------
+    def start_recording(self, path: str) -> None:
+        f = sf.SoundFile(
+            path, mode="w", samplerate=self.samplerate, channels=1, subtype="PCM_24"
+        )
+        with self._rec_lock:
+            self._rec_file = f
+
+    def stop_recording(self) -> None:
+        with self._rec_lock:
+            f, self._rec_file = self._rec_file, None
+        if f is not None:
+            f.close()
+
+    @property
+    def is_recording(self) -> bool:
+        return self._rec_file is not None
 
     def pause(self) -> None:
         self._paused.set()
@@ -323,6 +346,15 @@ class AnalysisPipeline:
             if chunk is None:  # end of stream (file source)
                 self._finished.set()
                 break
+
+            # Recording captures raw chunks whenever armed (even while paused).
+            with self._rec_lock:
+                if self._rec_file is not None:
+                    try:
+                        self._rec_file.write(chunk)
+                    except Exception:  # noqa: BLE001 — never let a write stop the stream
+                        pass
+
             if self._paused.is_set():
                 # Discard audio while paused and reset the rolling buffer so
                 # the next analysis after resume starts clean.

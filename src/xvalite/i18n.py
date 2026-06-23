@@ -33,6 +33,9 @@ _STRINGS = {
     "range_normal": {"ja": "通常（≤880 Hz）", "en": "Normal (≤880 Hz)"},
     "range_extended": {"ja": "拡張（≤2100 Hz, C7）", "en": "Extended (≤2100 Hz, C7)"},
     "peak_hold": {"ja": "ピークホールド", "en": "Peak hold"},
+    "record": {"ja": "● 録音", "en": "● Record"},
+    "rec_stop": {"ja": "■ 録音停止", "en": "■ Stop rec"},
+    "rec_saved": {"ja": "録音を保存しました", "en": "Recording saved"},
     "language": {"ja": "言語:", "en": "Language:"},
     "menu_view": {"ja": "表示", "en": "View"},
     # left panel headers

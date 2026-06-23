@@ -32,6 +32,7 @@ from ..audio.input import (
     list_input_devices,
     list_output_devices,
 )
+from ..audio.recording import next_record_path
 from ..config import load_config, save_config
 from ..i18n import LANGUAGES, get_language, set_language, tr
 from ..pipeline import (
@@ -271,6 +272,12 @@ class MainWindow(QtWidgets.QMainWindow):
         self.peak_check.setToolTip("Hold the per-frequency maximum on the spectrum view")
         self.peak_check.toggled.connect(self._on_peak_hold_toggled)
 
+        # Recording (mic only; independent toggle).
+        self.record_btn = QtWidgets.QPushButton("● 録音")
+        self.record_btn.setCheckable(True)
+        self.record_btn.toggled.connect(self._on_record_toggled)
+        self._rec_path = None
+
         # Language picker (top-right). Language names are shown in their own script.
         self._lbl_lang = QtWidgets.QLabel("Language:")
         self.lang_combo = QtWidgets.QComboBox()
@@ -281,6 +288,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self._lbl_range = QtWidgets.QLabel("Range:")
         row.addWidget(self.start_btn)
         row.addWidget(self.pause_btn)
+        row.addWidget(self.record_btn)
         row.addWidget(self._lbl_range)
         row.addWidget(self.mode_combo)
         row.addWidget(self.peak_check)
@@ -401,6 +409,8 @@ class MainWindow(QtWidgets.QMainWindow):
     def _stop(self) -> None:
         self._timer.stop()
         if self.pipeline is not None:
+            if self.pipeline.is_recording:
+                self._finish_recording()  # auto-save if recording when stopped
             self.pipeline.stop()
             self.pipeline = None
         self._set_running_ui(False)
@@ -569,6 +579,38 @@ class MainWindow(QtWidgets.QMainWindow):
         self.spectrum_plot.set_peak_hold(checked)
         self._save_config()
 
+    _REC_STYLE = "background: #c0392b; color: white; font-weight: bold;"
+
+    def _on_record_toggled(self, checked: bool) -> None:
+        if self.pipeline is None:
+            self.record_btn.setChecked(False)
+            return
+        if checked:
+            try:
+                self._rec_path = next_record_path()
+                self.pipeline.start_recording(self._rec_path)
+            except Exception as exc:  # noqa: BLE001
+                QtWidgets.QMessageBox.warning(self, "Recording", f"録音を開始できません:\n{exc}")
+                self.record_btn.setChecked(False)
+                return
+            self.record_btn.setText(tr("rec_stop"))
+            self.record_btn.setStyleSheet(self._REC_STYLE)
+        else:
+            self._finish_recording()
+
+    def _finish_recording(self) -> None:
+        if self.pipeline is not None:
+            self.pipeline.stop_recording()
+        self.record_btn.blockSignals(True)
+        self.record_btn.setChecked(False)
+        self.record_btn.blockSignals(False)
+        self.record_btn.setText(tr("record"))
+        self.record_btn.setStyleSheet("")
+        if self._rec_path:
+            self.statusBar().showMessage(
+                f"{tr('rec_saved')}: {os.path.basename(self._rec_path)}", 5000
+            )
+
     def _on_source_changed(self, _index: int) -> None:
         self._sync_source_widgets()
 
@@ -610,6 +652,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self._view_menu.setTitle(tr("menu_view"))
         self.start_btn.setText(tr("stop") if self._running else tr("start"))
         self.pause_btn.setText(tr("resume") if self.pause_btn.isChecked() else tr("pause"))
+        recording = self.pipeline is not None and self.pipeline.is_recording
+        self.record_btn.setText(tr("rec_stop") if recording else tr("record"))
         self._sync_source_widgets()
         self._update_voice_profile(self._last_profile)
 
@@ -684,6 +728,9 @@ class MainWindow(QtWidgets.QMainWindow):
         self.device_combo.setEnabled(not running)
         self.output_combo.setEnabled(not running)  # volume slider stays live
         self.pause_btn.setEnabled(running)
+        # Recording: mic source only, while running.
+        is_mic = self.src_combo.currentData() == "mic"
+        self.record_btn.setEnabled(running and is_mic)
         if not running:
             self.pause_btn.blockSignals(True)
             self.pause_btn.setChecked(False)

@@ -25,3 +25,6 @@ desktop.ini
 build/
 dist/
 *.spec
+
+# Recordings
+rec/
