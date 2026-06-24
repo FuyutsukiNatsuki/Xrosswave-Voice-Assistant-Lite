@@ -126,6 +126,8 @@
 - [x] **D**: 簡易録音（`audio/recording.py`＋pipeline.start/stop_recording、soundfile PCM_24、exe配下`/rec/YYYY-MM-DD-nnnn.wav`、独立録音ボタン・マイク時のみ有効・停止で自動保存・一時停止中も録音継続）。`verify_recording.py`で形式/長さ検証 |
 - [x] **E**: 分析レポートモード（`gui/report.py`）。レポートトグルON時のみ蓄積→Stopで別ウィンドウ表示。平均ピッチ(音名)/平均声質、声の傾向・声区・響きの割合（円グラフ=QPainter自作）、母音別フォルマントF1×F2プロット（男声/女声平均＝添付論文値＋あなたの声、pyqtgraph）、PNG出力(grab)。`smoke_report.py`で検証。
 
+- [x] **改善**: 母音推定を高頻度化（`VowelSample`、~5回/秒・短窓0.25s）＋精度向上（フォルマント上限5000・対数距離・不明ゲートで"e"偏重を解消。test.wavで i/e/a/o/u を均衡追跡）。**響きタイプ推定はオミット**（全帯域スペクトル重心では有声音がほぼdark/deepに落ち、信頼できる判別が不可能なため）。
+
 > **v1.6 全フェーズ(A〜E)完了。** 全検証・スモーク合格。母音参照値は男声/女声平均(`VOWEL_REF_MALE/FEMALE`)＋その平均で分類。閾値類(`voice_profile.py` の `RES_*`/`CHEST_*` 等、`i18n` の表記)は実声で要調整の初期値。
 
 ### 技術メモ: フォルマント分析の高速化余地

@@ -44,7 +44,7 @@ from .analysis.spectrogram import (
     column_frequencies,
     spectrum_column,
 )
-from .analysis.voice_profile import VoiceProfile, measure_voice_profile
+from .analysis.voice_profile import VoiceProfile, estimate_vowel, measure_voice_profile
 from .analysis.voice_quality import VoiceQuality, measure_voice_quality
 from .audio.input import DEFAULT_SAMPLERATE
 
@@ -130,6 +130,17 @@ class VoiceProfileSample:
 
 
 @dataclass(frozen=True)
+class VowelSample:
+    """Estimated vowel at a faster cadence (~5 Hz) on a short window."""
+
+    t: float
+    vowel: str       # a | e | i | o | u | unknown
+    vowel_conf: str
+    f1: float
+    f2: float
+
+
+@dataclass(frozen=True)
 class SpectrumFrame:
     """Instantaneous spectrum (dB per bin) for the live spectrum view.
 
@@ -142,7 +153,7 @@ class SpectrumFrame:
 
 
 Event = Union[
-    PitchSample, FormantSample, VoiceQualitySample, VoiceProfileSample,
+    PitchSample, FormantSample, VoiceQualitySample, VoiceProfileSample, VowelSample,
     SpectrogramColumn, WaveformFrame, SpectrumFrame,
 ]
 
@@ -165,6 +176,8 @@ class AnalysisPipeline:
         formant_interval_sec: float = 0.0,  # 0 = every chunk (~21.5 Hz at default blocksize)
         vq_window_sec: float = 1.0,
         vq_interval_sec: float = 1.0,
+        vowel_window_sec: float = 0.25,
+        vowel_interval_sec: float = 0.2,  # ~5 Hz vowel updates
         pitch_floor: float = DEFAULT_PITCH_FLOOR,
         pitch_ceiling: float = DEFAULT_F0_TRACK_CEILING,
         silence_db: float = DEFAULT_SILENCE_DB,
@@ -187,6 +200,9 @@ class AnalysisPipeline:
         self._formant_interval = int(samplerate * formant_interval_sec)
         self._vq_win = int(samplerate * vq_window_sec)
         self._vq_interval = int(samplerate * vq_interval_sec)
+        # Vowel: short window, faster cadence (responsive vowel tracking).
+        self._vowel_win = int(samplerate * vowel_window_sec)
+        self._vowel_interval = int(samplerate * vowel_interval_sec)
 
         # Spectrograms (narrowband + wideband) emitted at chunk rate.
         self._spec_max_freq = spectrogram_max_freq
@@ -214,6 +230,7 @@ class AnalysisPipeline:
         self._latest_formant: Optional[FormantSample] = None
         self._latest_vq: Optional[VoiceQualitySample] = None
         self._latest_profile: Optional[VoiceProfileSample] = None
+        self._latest_vowel: Optional[VowelSample] = None
         self._latest_spec_narrow: Optional[SpectrogramColumn] = None
         self._latest_spec_wide: Optional[SpectrogramColumn] = None
         self._latest_waveform: Optional[WaveformFrame] = None
@@ -314,6 +331,10 @@ class AnalysisPipeline:
         with self._lock:
             return self._latest_profile
 
+    def latest_vowel(self) -> Optional[VowelSample]:
+        with self._lock:
+            return self._latest_vowel
+
     def latest_spectrogram(self, wide: bool = False) -> Optional[SpectrogramColumn]:
         with self._lock:
             return self._latest_spec_wide if wide else self._latest_spec_narrow
@@ -334,6 +355,7 @@ class AnalysisPipeline:
         last_vq = 0         # sample count at last voice-quality analysis
         last_spec = 0       # sample count at last narrowband column
         last_wide = 0       # sample count at last wideband column (finer hop)
+        last_vowel = 0      # sample count at last vowel estimate
         while not self._stop.is_set():
             try:
                 chunk = self.source.read(timeout=0.2)
@@ -399,16 +421,24 @@ class AnalysisPipeline:
                     if _dbfs(window) < self.silence_db:
                         vq = VoiceQuality(float("nan"), float("nan"))
                         profile = VoiceProfile(
-                            "Unknown", "--", "unknown", "--", "unknown", "--",
-                            "unknown", "--",
-                            float("nan"), float("nan"), float("nan"),
-                            float("nan"), float("nan"),
+                            "Unknown", "--", "unknown", "--",
+                            float("nan"), float("nan"), float("nan"), float("nan"),
                         )
                     else:
                         vq = measure_voice_quality(window, self.samplerate)
                         profile = measure_voice_profile(window, self.samplerate)
                     self._emit(VoiceQualitySample(t, vq))
                     self._emit(VoiceProfileSample(t, profile))
+
+                # Vowel: fast cadence on a short window (skip when silent).
+                if buffer.size >= self._vowel_win and (total - last_vowel) >= self._vowel_interval:
+                    last_vowel = total
+                    window = buffer[-self._vowel_win :]
+                    if _dbfs(window) < self.silence_db:
+                        self._emit(VowelSample(t, "unknown", "--", float("nan"), float("nan")))
+                    else:
+                        v, vc, f1, f2 = estimate_vowel(window, self.samplerate)
+                        self._emit(VowelSample(t, v, vc, f1, f2))
 
                 # Narrowband: one column per chunk (frequency-focused).
                 if buffer.size >= NARROWBAND_WINDOW and (total - last_spec) >= self._spec_interval:
@@ -454,6 +484,8 @@ class AnalysisPipeline:
                 self._latest_vq = event
             elif isinstance(event, VoiceProfileSample):
                 self._latest_profile = event
+            elif isinstance(event, VowelSample):
+                self._latest_vowel = event
             elif isinstance(event, WaveformFrame):
                 self._latest_waveform = event
             elif isinstance(event, SpectrumFrame):

@@ -45,6 +45,7 @@ from ..pipeline import (
     SpectrumFrame,
     VoiceProfileSample,
     VoiceQualitySample,
+    VowelSample,
     WaveformFrame,
 )
 from .instant_plots import SpectrumPlot, WaveformPlot
@@ -116,6 +117,7 @@ class MainWindow(QtWidgets.QMainWindow):
         set_language(lang)
         self._config["language"] = lang
         self._last_profile = None  # for re-rendering the estimate on language switch
+        self._last_vowel = None
 
         self.samplerate = samplerate
         self.device = device
@@ -346,12 +348,11 @@ class MainWindow(QtWidgets.QMainWindow):
         # Estimation (register + voice tendency).
         self._hdr_e = header("推定")
         self.vowel_label = QtWidgets.QLabel("母音: --")
-        self.resonance_label = QtWidgets.QLabel("響き: --")
         self.register_label = QtWidgets.QLabel("声区: --")
         self.tendency_label = QtWidgets.QLabel("声の傾向: --")
         self.hnr_label = QtWidgets.QLabel("HNR: --")
         self.tendency_label.setToolTip("男声寄り / 中声 / 女声寄り（声の音響的傾向。性別判定ではありません）")
-        for lbl in (self.vowel_label, self.resonance_label, self.register_label,
+        for lbl in (self.vowel_label, self.register_label,
                     self.tendency_label, self.hnr_label):
             lbl.setStyleSheet("color: #ddd;")
             lbl.setWordWrap(True)
@@ -422,8 +423,6 @@ class MainWindow(QtWidgets.QMainWindow):
             "vowel_f1f2": {v: [] for v in ("a", "e", "i", "o", "u")},
             "tendency": {"low": 0, "mid": 0, "high": 0},
             "register": {"Chest": 0, "Mix": 0, "Head": 0},
-            "resonance": {k: 0 for k in
-                          ("bright", "balanced", "dark", "deep_pharyngeal", "twang", "breathy")},
             "hnr": [], "jitter": [], "shimmer": [], "seconds": 0.0,
         }
 
@@ -439,12 +438,12 @@ class MainWindow(QtWidgets.QMainWindow):
                 r["register"][p.register] += 1
             if p.tendency in r["tendency"]:
                 r["tendency"][p.tendency] += 1
-            if p.resonance in r["resonance"]:
-                r["resonance"][p.resonance] += 1
-            if p.vowel in r["vowel_f1f2"] and np.isfinite(p.mean_f1) and np.isfinite(p.mean_f2):
-                r["vowel_f1f2"][p.vowel].append((p.mean_f1, p.mean_f2))
             if np.isfinite(p.hnr):
                 r["hnr"].append(p.hnr)
+        elif isinstance(ev, VowelSample):
+            if ev.vowel in r["vowel_f1f2"] and np.isfinite(ev.f1) and np.isfinite(ev.f2):
+                r["vowel_f1f2"][ev.vowel].append((ev.f1, ev.f2))
+            r["seconds"] = max(r["seconds"], ev.t)
         elif isinstance(ev, VoiceQualitySample):
             if np.isfinite(ev.voice_quality.jitter_local):
                 r["jitter"].append(ev.voice_quality.jitter_local)
@@ -482,6 +481,8 @@ class MainWindow(QtWidgets.QMainWindow):
                 self._update_voice_quality(ev.voice_quality)
             elif isinstance(ev, VoiceProfileSample):
                 self._update_voice_profile(ev.profile)
+            elif isinstance(ev, VowelSample):
+                self._update_vowel(ev)
             elif isinstance(ev, WaveformFrame):
                 if self.osc_plot.isVisible():
                     self.osc_plot.set_frame(ev.samples)
@@ -534,8 +535,8 @@ class MainWindow(QtWidgets.QMainWindow):
         self.jitter_label.setStyleSheet(VQ_STYLE_IDLE)
         self.shimmer_label.setStyleSheet(VQ_STYLE_IDLE)
         self._last_profile = None
+        self._last_vowel = None
         self.vowel_label.setText(f"{tr('vowel')}: --")
-        self.resonance_label.setText(f"{tr('resonance')}: --")
         self.register_label.setText(f"{tr('register')}: --")
         self.tendency_label.setText(f"{tr('tendency')}: --")
         self.hnr_label.setText("HNR: --")
@@ -550,27 +551,23 @@ class MainWindow(QtWidgets.QMainWindow):
             return f"{tr(name_key)}: {tr(value_key + '.' + value)}（{conf}：{tr('conf.' + value_conf)}）"
 
         if p is None:
-            p_unknown = True
-        else:
-            p_unknown = False
-        # Vowel + resonance are valid even mid-transition; register/tendency may be Unknown.
-        self.vowel_label.setText(
-            f"{tr('vowel')}: --" if p_unknown else line("vowel", "vowel", p.vowel, p.vowel_conf)
-        )
-        self.resonance_label.setText(
-            f"{tr('resonance')}: --" if p_unknown
-            else line("resonance", "resonance", p.resonance, p.resonance_conf)
-        )
-        self.register_label.setText(
-            f"{tr('register')}: --" if p_unknown
-            else line("register", "register", p.register, p.register_conf)
-        )
-        self.tendency_label.setText(
-            f"{tr('tendency')}: --" if p_unknown
-            else line("tendency", "tendency", p.tendency, p.tendency_conf)
-        )
-        hnr = f"{p.hnr:.1f} dB" if (p is not None and np.isfinite(p.hnr)) else "--"
+            self.register_label.setText(f"{tr('register')}: --")
+            self.tendency_label.setText(f"{tr('tendency')}: --")
+            self.hnr_label.setText("HNR: --")
+            return
+        self.register_label.setText(line("register", "register", p.register, p.register_conf))
+        self.tendency_label.setText(line("tendency", "tendency", p.tendency, p.tendency_conf))
+        hnr = f"{p.hnr:.1f} dB" if np.isfinite(p.hnr) else "--"
         self.hnr_label.setText(f"HNR: {hnr}")
+
+    def _update_vowel(self, ev) -> None:
+        self._last_vowel = ev
+        if ev is None or ev.vowel == "unknown":
+            self.vowel_label.setText(f"{tr('vowel')}: --")
+            return
+        self.vowel_label.setText(
+            f"{tr('vowel')}: {tr('vowel.' + ev.vowel)}（{tr('conf')}：{tr('conf.' + ev.vowel_conf)}）"
+        )
 
     @staticmethod
     def _set_vq_label(label, name: str, value: float, warning: bool) -> None:
@@ -708,6 +705,7 @@ class MainWindow(QtWidgets.QMainWindow):
         self.record_btn.setText(tr("rec_stop") if recording else tr("record"))
         self._sync_source_widgets()
         self._update_voice_profile(self._last_profile)
+        self._update_vowel(self._last_vowel)
 
     def _apply_config(self) -> None:
         cfg = self._config

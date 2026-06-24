@@ -117,10 +117,11 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
-  - `analysis/voice_profile.py` — `measure_voice_profile` → `VoiceProfile`: estimates vocal
-    register (Chest/Mix/Head) and voice tendency (low/mid/high) from F0 + F1 + HNR (Parselmouth
-    harmonicity) + spectral centroid. Heuristic + confidence; no librosa/pyworld. Reported as
-    estimates, not verdicts (tunable thresholds; meaningful only on sustained phonation).
+  - `analysis/voice_profile.py` — `measure_voice_profile` → `VoiceProfile` (register Chest/Mix/Head
+    + voice tendency low/mid/high from F0+F1+HNR+centroid, ~1 Hz) and `estimate_vowel` →
+    nearest JP vowel by log-distance in F1/F2 (formant ceiling 5000 for accuracy; "unknown" gate
+    avoids forcing central /e/). Heuristic + confidence; no librosa/pyworld. Resonance-type
+    estimation was removed (not reliable from F1/F2/HNR alone).
   - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: dB column (Hann +
     rFFT). `window_size` sets resolution: narrowband (2048 ≈ 21.5 Hz) vs wideband (256, zero-padded
     to 1024). Display ceiling 6400 Hz. Formant analyzer ceiling also 6400 (`analysis/formant.py`).
@@ -136,7 +137,7 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     background thread. Cadences: F0 per chunk, formants per chunk (~21 Hz), narrowband
     spectrogram per chunk, wideband spectrogram per `WIDEBAND_HOP` (~5.8 ms, ≈8× finer
     time res; `SpectrogramColumn.wide`), jitter/shimmer + register/voice-tendency
-    (`VoiceProfileSample`) once/sec.
+    (`VoiceProfileSample`) once/sec, vowel (`VowelSample`) ~5/sec on a short window.
     Plus an oscilloscope `WaveformFrame` per chunk. Results via `drain()` (FIFO of
     `PitchSample`/`FormantSample`/`VoiceQualitySample`/`SpectrogramColumn`/`WaveformFrame`)
     and `latest_pitch()`/

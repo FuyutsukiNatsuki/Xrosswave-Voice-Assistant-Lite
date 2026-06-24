@@ -15,7 +15,7 @@ import _bootstrap  # noqa: F401
 
 import numpy as np
 
-from xvalite.analysis.voice_profile import measure_voice_profile
+from xvalite.analysis.voice_profile import estimate_vowel, measure_voice_profile
 
 SR = 44100
 DUR = 1.0
@@ -65,10 +65,10 @@ def main() -> int:
     print(f"clean:   HNR={clean.hnr:.1f}    breathy: HNR={breathy.hnr:.1f}")
 
     # Vowel estimation on formant-filtered noise (/a/: F1 800/F2 1200, /i/: 300/2300).
-    va = measure_voice_profile(vowel_sound(800.0, 1200.0), SR)
-    vi = measure_voice_profile(vowel_sound(300.0, 2300.0), SR)
-    print(f"/a/ -> vowel={va.vowel}  (F1={va.mean_f1:.0f} F2={va.mean_f2:.0f})")
-    print(f"/i/ -> vowel={vi.vowel}  (F1={vi.mean_f1:.0f} F2={vi.mean_f2:.0f})")
+    va_v, _, va_f1, va_f2 = estimate_vowel(vowel_sound(800.0, 1200.0), SR)
+    vi_v, _, vi_f1, vi_f2 = estimate_vowel(vowel_sound(300.0, 2300.0), SR)
+    print(f"/a/ -> vowel={va_v}  (F1={va_f1:.0f} F2={va_f2:.0f})")
+    print(f"/i/ -> vowel={vi_v}  (F1={vi_f1:.0f} F2={vi_f2:.0f})")
 
     checks = {
         # The real-voice tendency thresholds shouldn't read a 150 Hz tone as a
@@ -80,8 +80,8 @@ def main() -> int:
         and clean.hnr > breathy.hnr,
         "voiced tones classified (not Unknown)": low.register != "Unknown"
         and high.register != "Unknown",
-        "/a/ vowel estimated as a": va.vowel == "a",
-        "/i/ vowel estimated as i": vi.vowel == "i",
+        "/a/ vowel estimated as a": va_v == "a",
+        "/i/ vowel estimated as i": vi_v == "i",
     }
     ok = True
     for name, passed in checks.items():

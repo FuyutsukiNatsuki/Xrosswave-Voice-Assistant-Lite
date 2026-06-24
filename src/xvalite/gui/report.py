@@ -24,10 +24,6 @@ from ..i18n import tr
 
 _TENDENCY_COLORS = {"low": "#5aa0e6", "mid": "#bbbbbb", "high": "#e67ad0"}
 _REGISTER_COLORS = {"Chest": "#e6a14a", "Mix": "#7ad07a", "Head": "#b07ad0"}
-_RESONANCE_COLORS = {
-    "bright": "#ffd23f", "balanced": "#7ad07a", "dark": "#5a7ad0",
-    "deep_pharyngeal": "#9a5ad0", "twang": "#e6604a", "breathy": "#9aa6b2",
-}
 _VOWEL_ORDER = ["i", "e", "a", "o", "u"]  # perimeter order for the polygon
 
 
@@ -124,7 +120,7 @@ class ReportWindow(QtWidgets.QWidget):
         pies = QtWidgets.QHBoxLayout()
         pies.addWidget(self._make_pie(tr("rep_tendency"), data["tendency"], _TENDENCY_COLORS, "tendency"))
         pies.addWidget(self._make_pie(tr("rep_register"), data["register"], _REGISTER_COLORS, "register"))
-        pies.addWidget(self._make_pie(tr("rep_resonance"), data["resonance"], _RESONANCE_COLORS, "resonance"))
+        pies.addStretch(1)
         layout.addLayout(pies)
 
         means = {v: (float(np.mean([f1 for f1, _ in pairs])),
