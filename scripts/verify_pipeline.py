@@ -15,6 +15,7 @@ Run:
 
 import _bootstrap  # noqa: F401  (adds src/ to sys.path)
 
+import os
 import sys
 import time
 
@@ -31,7 +32,7 @@ from xvalite.pipeline import (
     VoiceQualitySample,
 )
 
-DEFAULT_PATH = r"C:\XVALite\testdata\test.wav"
+DEFAULT_PATH = os.path.join(os.path.dirname(__file__), "..", "testdata", "test.wav")
 
 
 def part_throughput(path: str) -> bool:

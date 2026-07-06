@@ -37,7 +37,9 @@ def main() -> int:
 
     window = MainWindow(
         samplerate=DEFAULT_SAMPLERATE,
-        initial_file=r"C:\XVALite\testdata\does_not_exist.wav",
+        initial_file=os.path.join(
+            os.path.dirname(__file__), "..", "testdata", "does_not_exist.wav"
+        ),
     )
     window.show()
     window.start()  # should show a dialog and NOT start

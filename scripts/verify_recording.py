@@ -21,7 +21,9 @@ from xvalite.audio.file_input import FileInput
 from xvalite.audio.input import DEFAULT_SAMPLERATE
 from xvalite.pipeline import AnalysisPipeline
 
-SRC = sys.argv[1] if len(sys.argv) > 1 else r"C:\XVALite\testdata\test.wav"
+SRC = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+    os.path.dirname(__file__), "..", "testdata", "test.wav"
+)
 OUT = os.path.join(tempfile.gettempdir(), "xvalite_rec_test.wav")
 
 

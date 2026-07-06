@@ -13,6 +13,7 @@ Run:
 
 import _bootstrap  # noqa: F401  (adds src/ to sys.path)
 
+import os
 import sys
 import time
 
@@ -25,7 +26,7 @@ from xvalite.analysis.pitch import latest_f0
 from xvalite.analysis.formant import latest_formants
 from xvalite.analysis.voice_quality import measure_voice_quality
 
-DEFAULT_PATH = r"C:\XVALite\testdata\test.wav"
+DEFAULT_PATH = os.path.join(os.path.dirname(__file__), "..", "testdata", "test.wav")
 WINDOW_SEC = 1.0
 HOP_SEC = 0.5
 

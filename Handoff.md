@@ -128,6 +128,10 @@
 
 - [x] **改善**: 母音推定を高頻度化（`VowelSample`、~5回/秒・短窓0.25s）＋精度向上（フォルマント上限5000・対数距離・不明ゲートで"e"偏重を解消。test.wavで i/e/a/o/u を均衡追跡）。**響きタイプ推定はオミット**（全帯域スペクトル重心では有声音がほぼdark/deepに落ち、信頼できる判別が不可能なため）。
 
+### 外部コントリビューション
+- 2026-06-04: **PR #1 (enitimeago) をマージ**。macOSソース実行の文書化（Apple SiliconはネイティブPython必須、Rosettaで約20倍遅）、検証スクリプトの相対パス化、`make_testdata.py`（合成テストWAV生成。生声test.wavが無い環境向け）。実機検証後マージ。
+- フォローアップ（作者側）: `make_testdata.py` に上書きガード追加（既存ファイルは `--force` 無しで拒否＝生声test.wav保護）、残っていた固定パス5箇所（verify_file_input/verify_pipeline/verify_recording/make_screenshot/smoke_errors）も相対化。
+
 > **v1.6 全フェーズ(A〜E)完了。** 全検証・スモーク合格。母音参照値は男声/女声平均(`VOWEL_REF_MALE/FEMALE`)＋その平均で分類。閾値類(`voice_profile.py` の `RES_*`/`CHEST_*` 等、`i18n` の表記)は実声で要調整の初期値。
 
 ### 技術メモ: フォルマント分析の高速化余地

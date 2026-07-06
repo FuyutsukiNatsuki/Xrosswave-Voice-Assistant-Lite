@@ -11,7 +11,10 @@ estimation sees more than one target. Two ~0.5 s silent gaps exercise the
 pipeline's silence dead zone.
 
 Run:
-    .venv/bin/python scripts/make_testdata.py [out_path]
+    .venv/bin/python scripts/make_testdata.py [out_path] [--force]
+
+Refuses to overwrite an existing file unless ``--force`` is given (the default
+target may be a personal recording kept locally).
 """
 
 import os
@@ -131,10 +134,20 @@ def main() -> int:
     rng = np.random.default_rng(SEED)  # reserved for future noise-mixing; unused for now
     del rng
 
-    out_path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(
+    args = [a for a in sys.argv[1:] if a != "--force"]
+    force = "--force" in sys.argv[1:]
+    out_path = args[0] if args else os.path.join(
         os.path.dirname(__file__), "..", "testdata", "test.wav"
     )
     out_path = os.path.abspath(out_path)
+
+    # Guard: the default target may be someone's personal recording (the repo
+    # owner keeps a real voice sample there, gitignored). Never clobber silently.
+    if os.path.exists(out_path) and not force:
+        print(f"refusing to overwrite existing {out_path}")
+        print("pass --force to overwrite, or give a different output path")
+        return 1
+
     os.makedirs(os.path.dirname(out_path), exist_ok=True)
 
     sig = synth()

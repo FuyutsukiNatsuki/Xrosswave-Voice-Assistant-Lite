@@ -51,6 +51,9 @@ The venv lives at `.venv` (Python 3.11.9). Use its interpreter directly:
 # Verify register / voice-tendency / vowel estimation (deterministic, no mic needed)
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_voice_profile_synthetic.py
 
+# Generate a synthetic testdata/test.wav (won't overwrite an existing file without --force)
+& "C:\XVALite\.venv\Scripts\python.exe" scripts\make_testdata.py [out.wav] [--force]
+
 # Verify recording writes a valid 24-bit/44.1k/mono WAV
 & "C:\XVALite\.venv\Scripts\python.exe" scripts\verify_recording.py
 
@@ -174,9 +177,15 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
     (F0 + F1–F4 color-matched; jitter/shimmer red with ⚠ above the fixed thresholds; estimated
     register / voice tendency / HNR); plots stay stacked on the right. File end auto-stops the
     controls. UI prefs persist via `config.py`.
-- `scripts/` — runnable verification/smoke scripts (not part of the package).
+- `scripts/` — runnable verification/smoke scripts (not part of the package). File-based
+  scripts resolve `testdata/test.wav` relative to the repo (portable; PR #1). If the real
+  recording is absent, generate a synthetic stand-in with `make_testdata.py`.
   - `run_app.py` — launch the GUI (`--file PATH` for file input, else mic).
   - `smoke_gui.py` — headless (offscreen) GUI check; the visual run needs a real machine.
+  - `make_testdata.py` — synthesize a voice-like test WAV (refuses to overwrite w/o `--force`).
+
+macOS (source-run) is supported per README — Apple Silicon needs an arm64-native Python
+(Rosetta x86_64 runs Praat ~20× slower).
 
 ## Notes / gotchas
 
