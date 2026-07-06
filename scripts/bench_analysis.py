@@ -5,9 +5,15 @@ voice quality once per second. If pitch+formant time stays well under the chunk
 duration, analysis keeps up with real time on this machine.
 
 Run:
-    & "C:\\XVALite\\.venv\\Scripts\\python.exe" scripts\\bench_analysis.py
+    .venv/bin/python scripts/bench_analysis.py [path.wav]
+
+If no path is given (and testdata/test.wav is absent), a 5 s voiced signal is
+synthesized in memory instead -- see ``make_testdata.synth`` for the technique
+(pulse-train source through a resonator-cascade vowel filter).
 """
 
+import os
+import sys
 import time
 
 import _bootstrap  # noqa: F401
@@ -19,7 +25,7 @@ from xvalite.analysis.formant import latest_formants
 from xvalite.analysis.pitch import latest_f0
 from xvalite.analysis.voice_quality import measure_voice_quality
 
-PATH = r"C:\XVALite\testdata\test.wav"
+DEFAULT_PATH = os.path.join(os.path.dirname(__file__), "..", "testdata", "test.wav")
 SR = 44100
 CHUNK_MS = 2048 / SR * 1000  # ~46 ms
 N = 200
@@ -33,9 +39,33 @@ def bench(fn, window) -> float:
     return (time.perf_counter() - start) / N * 1000  # ms/call
 
 
+def _synthetic_signal(duration_sec: float = 5.0) -> np.ndarray:
+    """In-memory fallback when no test WAV is available: reuse make_testdata's
+    pulse-train-through-resonators technique so all analysis stages see
+    voice-like content (harmonics + formant structure), not a plain tone."""
+    import make_testdata as mt
+
+    n = int(SR * duration_sec)
+    t = np.arange(n) / SR
+    f0 = mt.F0_LOW + (mt.F0_HIGH - mt.F0_LOW) * (t / duration_sec)
+    source = mt.glottal_pulse_train(f0, SR)
+    sig = mt.apply_vowel(source, *mt.VOWEL_A, SR)
+    rms = float(np.sqrt(np.mean(sig ** 2)))
+    target_rms = 10 ** (mt.TARGET_RMS_DBFS / 20.0)
+    if rms > 0:
+        sig *= target_rms / rms
+    return sig.astype(np.float32)
+
+
 def main() -> int:
-    x, sr = sf.read(PATH, dtype="float32", always_2d=True)
-    x = x.mean(axis=1)
+    path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT_PATH
+    if os.path.isfile(path):
+        x, sr = sf.read(path, dtype="float32", always_2d=True)
+        x = x.mean(axis=1)
+    else:
+        print(f"no WAV at {path!r} -- synthesizing a 5 s voiced signal in memory instead")
+        x = _synthetic_signal()
+        sr = SR
     # Pick a voiced 1 s region near the middle.
     mid = x.size // 2
     win1s = x[mid : mid + sr]

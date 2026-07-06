@@ -20,7 +20,7 @@ from PySide6 import QtCore, QtWidgets  # noqa: E402
 from xvalite.audio.input import DEFAULT_SAMPLERATE  # noqa: E402
 from xvalite.gui.main_window import MainWindow  # noqa: E402
 
-PATH = r"C:\XVALite\testdata\test.wav"
+PATH = os.path.join(os.path.dirname(__file__), "..", "testdata", "test.wav")
 
 
 def main() -> int:

@@ -89,7 +89,8 @@
 
 ## 動作環境
 
-- Windows
+- Windows（配布版・ソース実行）
+- macOS — ソースから実行（下記参照。Apple Silicon で動作確認済み）
 - ソースから動かす場合: **Python 3.11**
   （Parselmouth / PySide6 が新しい Python の wheel を提供していないため 3.11 を使用）
 
@@ -115,6 +116,29 @@ py -3.11 -m venv .venv
 
 主なオプション: `--file PATH`（解析するファイル）, `--device N`（マイクのデバイス番号）,
 `--silence-db DB`（入力デッドゾーン dBFS、既定 -40。0 に近づけるほど強くゲート）。
+
+### macOS から実行する場合
+
+```bash
+git clone https://github.com/FuyutsukiNatsuki/Xrosswave-Voice-Assistant-Lite.git
+cd Xrosswave-Voice-Assistant-Lite
+
+# 仮想環境を作成（Python 3.11）
+python3.11 -m venv .venv
+
+# 依存をインストール
+.venv/bin/python -m pip install -r requirements.txt
+
+# 起動（マイク入力）
+.venv/bin/python scripts/run_app.py
+```
+
+> **Apple Silicon Mac の注意:** venv は必ず **arm64 ネイティブの Python** で
+> 作ってください。Intel 用（x86_64）の Python を使うと Rosetta 2 経由の
+> エミュレーション実行になり、エラーは出ないまま音声解析（Praat）が
+> 最大 20 倍ほど遅くなって表示がカクつきます。確認方法:
+> `.venv/bin/python -c "import platform; print(platform.machine())"` の出力が
+> `arm64` ならネイティブです。
 
 ## 単体実行ファイル（.exe）のビルド
 
