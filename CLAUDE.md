@@ -120,11 +120,15 @@ binaries (libsndfile, PortAudio, the Praat extension). Verified to launch;
   - `analysis/pitch.py` — `extract_f0` / `latest_f0`: Parselmouth F0 (unvoiced → NaN).
   - `analysis/formant.py` — `extract_formants` / `latest_formants`: Burg F1-F4 (undefined → NaN).
   - `analysis/voice_quality.py` — `measure_voice_quality` → `VoiceQuality` (local jitter/shimmer + fixed-threshold warning flags).
-  - `analysis/voice_profile.py` — `measure_voice_profile` → `VoiceProfile` (register Chest/Mix/Head
-    + voice tendency low/mid/high from F0+F1+HNR+centroid, ~1 Hz) and `estimate_vowel` →
-    nearest JP vowel by log-distance in F1/F2 (formant ceiling 5000 for accuracy; "unknown" gate
-    avoids forcing central /e/). Heuristic + confidence; no librosa/pyworld. Resonance-type
-    estimation was removed (not reliable from F1/F2/HNR alone).
+  - `analysis/voice_profile.py` — `measure_voice_profile` → `VoiceProfile` (register Chest/Mix/Head,
+    ~1 Hz) and `estimate_vowel` → nearest JP vowel by log-distance in F1/F2 (formant ceiling 5000
+    for accuracy; "unknown" gate avoids forcing central /e/). Voice tendency (low/mid/high) scores
+    F0 (±2.2) against an equally-weighted formant group: vowel-normalized F1/F2 lean (measured
+    point vs male/female reference *for the identified vowel*, ±1.5) + F3 as a tract-length cue
+    (±0.8; located by searching the band 2300–3400 Hz, not by slot — Burg can insert a spurious
+    pole below F2 and shift slots). In the F0-overlap zone (165–210 Hz) formants decide; high
+    confidence (|score|≥3.0) requires F0 AND formant agreement. Heuristic + confidence; no
+    librosa/pyworld. Resonance-type estimation was removed (not reliable from F1/F2/HNR alone).
   - `analysis/spectrogram.py` — `spectrum_column` / `column_frequencies`: dB column (Hann +
     rFFT). `window_size` sets resolution: narrowband (2048 ≈ 21.5 Hz) vs wideband (256, zero-padded
     to 1024). Display ceiling 6400 Hz. Formant analyzer ceiling also 6400 (`analysis/formant.py`).

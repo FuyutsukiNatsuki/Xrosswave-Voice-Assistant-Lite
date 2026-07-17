@@ -52,6 +52,35 @@ def vowel_sound(f1, f2, seed=0):
     return (0.3 * sig / (np.max(np.abs(sig)) + 1e-9)).astype(np.float32)
 
 
+def voiced_vowel(f0_hz, formants, bandwidths, seed=0):
+    """A voiced vowel: sawtooth + high-passed aspiration noise through a
+    resonator cascade, with the fundamental reinstated.
+
+    Design notes (each element earned by a failure mode):
+    * five formants below 5 kHz — matches the production analyzer's pole
+      budget, otherwise a spare pole lands between F1 and F2;
+    * high-passed noise — fills the spectrum between harmonics so Burg samples
+      formant peaks continuously, without breaking low-band periodicity;
+    * reinstated fundamental — the cascade all but removes it, which makes the
+      pitch tracker octave-jump. Callers should also pick an F0 whose period
+      is an integer number of samples (e.g. 175 Hz → 252 samples).
+    """
+    n = int(SR * DUR)
+    phase = np.cumsum(np.full(n, f0_hz)) / SR
+    saw = 2.0 * (phase - np.floor(phase)) - 1.0
+    rng = np.random.default_rng(seed)
+    noise = rng.standard_normal(n)
+    k = max(3, SR // 700)
+    hp_noise = noise - np.convolve(noise, np.ones(k) / k, mode="same")
+    sig = saw + 0.5 * hp_noise
+    for f, b in zip(formants, bandwidths):
+        sig = _resonator(sig, f, b)
+    sig = sig / (np.max(np.abs(sig)) + 1e-9)
+    t = np.arange(n) / SR
+    sig = 0.85 * sig + 0.15 * np.sin(2 * np.pi * f0_hz * t)
+    return (0.3 * sig / (np.max(np.abs(sig)) + 1e-9)).astype(np.float32)
+
+
 def main() -> int:
     low = measure_voice_profile(tone(150.0, 10), SR)
     high = measure_voice_profile(tone(600.0, 4), SR)
@@ -70,11 +99,30 @@ def main() -> int:
     print(f"/a/ -> vowel={va_v}  (F1={va_f1:.0f} F2={va_f2:.0f})")
     print(f"/i/ -> vowel={vi_v}  (F1={vi_f1:.0f} F2={vi_f2:.0f})")
 
+    # Formant-decided tendency: SAME F0 (175 Hz = an exact 252-sample period,
+    # inside the male/female overlap zone where the F0 term is 0) but
+    # male-reference vs female-reference /a/ formants incl. F3. The formant
+    # group alone must separate them.
+    male_v = measure_voice_profile(
+        voiced_vowel(175.0, [700.0, 1200.0, 2500.0, 3400.0, 4400.0],
+                     [70.0, 80.0, 100.0, 130.0, 160.0]), SR
+    )
+    female_v = measure_voice_profile(
+        voiced_vowel(175.0, [850.0, 1300.0, 2950.0, 4100.0, 4500.0],
+                     [70.0, 80.0, 100.0, 130.0, 160.0]), SR
+    )
+    print(f"175Hz + male formants   -> tendency={male_v.tendency}  (F0={male_v.mean_f0:.0f})")
+    print(f"175Hz + female formants -> tendency={female_v.tendency}  (F0={female_v.mean_f0:.0f})")
+
     checks = {
-        # The real-voice tendency thresholds shouldn't read a 150 Hz tone as a
-        # high voice; exact low/mid on a synthetic buzz isn't meaningful.
+        # Direction-level checks on plain buzz tones (their "formants" are just
+        # harmonics, so exact labels aren't meaningful — only the F0 direction).
         "low tone not classified high": low.tendency != "high",
-        "high tone -> 高声寄り": high.tendency == "high",
+        "high tone not classified low": high.tendency != "low",
+        # The new formant-aware behavior: identical F0 in the overlap zone,
+        # resonances alone must decide.
+        "175Hz + male formants -> 男声寄り": male_v.tendency == "low",
+        "175Hz + female formants -> 女声寄り": female_v.tendency == "high",
         "clean HNR > breathy HNR": np.isfinite(clean.hnr)
         and np.isfinite(breathy.hnr)
         and clean.hnr > breathy.hnr,
