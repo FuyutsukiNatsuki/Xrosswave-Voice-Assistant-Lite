@@ -38,26 +38,27 @@ HEAD_F1_MAX = 480.0
 HEAD_HNR_MAX = 12.0  # low HNR ≈ breathy (stand-in for aperiodicity)
 
 # --- tendency (low/high voice) scoring ---
-# F0 and the formant group carry EQUAL total weight (±2.2 each), so in the
-# F0-overlap zone (165–210 Hz) the resonance evidence decides, and clearly
-# contradicting formants can pull an out-of-zone F0 back to neutral.
+# Weight split: F0 ±1.6 vs formant group ±3.0 (vowel term ±2.0 + F3 ±1.0),
+# i.e. pitch : formants ≈ 3.5 : 6.5 — resonance evidence dominates, F0 leans.
+# Formants alone can reach high confidence; contradicting formants can fully
+# override an out-of-zone F0.
 F0_HIGH = 210.0
 F0_LOW = 165.0
-F0_WEIGHT = 2.2
-VOWEL_TERM_GAIN = 8.0    # log-distance difference (male vs female ref) → score
-VOWEL_TERM_CLIP = 1.5    # max contribution of the vowel-relative F1/F2 term
+F0_WEIGHT = 1.6
+VOWEL_TERM_GAIN = 10.0   # log-distance difference (male vs female ref) → score
+VOWEL_TERM_CLIP = 2.0    # max contribution of the vowel-relative F1/F2 term
 F3_MALE_MAX = 2700.0     # F3 tracks vocal-tract length, nearly vowel-independent
 F3_FEMALE_MIN = 2850.0
-F3_WEIGHT = 0.8
+F3_WEIGHT = 1.0
 # F3 is located by SEARCHING the measured formants for the lowest one inside
 # this band, not by trusting slot [2] — Burg sometimes inserts a spurious pole
 # below F2, shifting every later slot up by one.
 F3_BAND = (2300.0, 3400.0)
 CENTROID_HIGH = 1850.0
 CENTROID_WEIGHT = 0.4
-TENDENCY_DECIDE = 1.4    # |score| to leave "mid" (a fully-clipped vowel term suffices)
+TENDENCY_DECIDE = 1.4    # |score| to leave "mid" (F0 alone or a strong vowel term suffices)
 TENDENCY_STRONG = 3.0    # |score| for high confidence — F0 alone can't reach this;
-                         # it needs corroborating formant evidence
+                         # it takes a full formant group, or F0 + formant agreement
 
 # --- vowel reference formants (F1, F2) in Hz: male/female averages and their
 # mean (used for classification). Values from cited Japanese-vowel averages. ---
